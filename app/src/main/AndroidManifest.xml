@@ -73,7 +73,21 @@
 
         <service
             android:name=".assistant.DispatcherVoiceInteractionSessionService"
-            android:exported="false"
+            android:exported="true"
             android:permission="android.permission.BIND_VOICE_INTERACTION" />
+
+        <service
+            android:name=".assistant.DispatcherRecognitionService"
+            android:exported="true"
+            android:label="@string/voice_service_label"
+            android:permission="android.permission.BIND_SPEECH_RECOGNITION_SERVICE">
+            <intent-filter>
+                <action android:name="android.speech.RecognitionService" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+            <meta-data
+                android:name="android.speech"
+                android:resource="@xml/recognition_service" />
+        </service>
     </application>
 </manifest>

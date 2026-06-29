@@ -16,17 +16,17 @@ class DispatcherVoiceInteractionSessionService : VoiceInteractionSessionService(
 private class DispatcherVoiceInteractionSession(
     context: android.content.Context,
 ) : VoiceInteractionSession(context) {
-    private var launched = false
+    override fun onPrepareShow(args: Bundle?, showFlags: Int) {
+        super.onPrepareShow(args, showFlags)
+        setUiEnabled(false)
+    }
 
     override fun onShow(args: Bundle?, showFlags: Int) {
         super.onShow(args, showFlags)
-        if (launched) return
-        launched = true
-        context.startActivity(
+        startAssistantActivity(
             Intent(context, AssistantEntryActivity::class.java).apply {
-                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+                addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
             },
         )
-        finish()
     }
 }

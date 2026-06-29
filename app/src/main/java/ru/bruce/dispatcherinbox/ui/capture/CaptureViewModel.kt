@@ -84,19 +84,38 @@ class CaptureViewModel(
     }
 
     fun addAttachment(uri: Uri) {
+        addAttachments(listOf(uri))
+    }
+
+    fun addAttachments(uris: List<Uri>) {
+        val selectedUris = uris.distinct()
+        if (selectedUris.isEmpty()) return
         lastSavedId = null
         viewModelScope.launch {
-            localState.value = localState.value.copy(isBusy = true, statusMessage = "Копируем файл…")
-            runCatching { repository.stage(uri) }
-                .onSuccess { draft ->
-                    localState.value = localState.value.copy(
-                        attachments = localState.value.attachments + draft,
-                        isBusy = false,
-                        statusMessage = "Файл добавлен",
-                        isError = false,
-                    )
-                }
-                .onFailure { showError("Не удалось добавить файл") }
+            localState.value = localState.value.copy(
+                isBusy = true,
+                statusMessage = if (selectedUris.size == 1) "Копируем файл…"
+                else "Копируем файлов: ${selectedUris.size}…",
+                isError = false,
+            )
+            val added = mutableListOf<AttachmentDraft>()
+            var failedCount = 0
+            selectedUris.forEach { uri ->
+                runCatching { repository.stage(uri) }
+                    .onSuccess(added::add)
+                    .onFailure { failedCount += 1 }
+            }
+            localState.value = localState.value.copy(
+                attachments = localState.value.attachments + added,
+                isBusy = false,
+                statusMessage = when {
+                    failedCount == 0 && added.size == 1 -> "Файл добавлен"
+                    failedCount == 0 -> "Добавлено файлов: ${added.size}"
+                    added.isNotEmpty() -> "Добавлено: ${added.size}, ошибок: $failedCount"
+                    else -> "Не удалось добавить выбранные файлы"
+                },
+                isError = failedCount > 0,
+            )
         }
     }
 

@@ -80,11 +80,13 @@ fun CaptureScreen(
     ) { granted ->
         if (granted) viewModel.startRecording() else viewModel.onAudioPermissionDenied()
     }
-    val filePicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
-        uri?.let(viewModel::addAttachment)
+    val filePicker = rememberLauncherForActivityResult(ActivityResultContracts.GetMultipleContents()) { uris ->
+        viewModel.addAttachments(uris)
     }
-    val photoPicker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
-        uri?.let(viewModel::addAttachment)
+    val photoPicker = rememberLauncherForActivityResult(
+        ActivityResultContracts.PickMultipleVisualMedia(maxItems = 20),
+    ) { uris ->
+        viewModel.addAttachments(uris)
     }
 
     fun startWithPermission() {
@@ -159,13 +161,13 @@ fun CaptureScreen(
             IconButton(
                 enabled = !state.isBusy && !state.isRecording,
                 onClick = { filePicker.launch("*/*") },
-            ) { Icon(Icons.Default.AttachFile, contentDescription = "Прикрепить файл") }
+            ) { Icon(Icons.Default.AttachFile, contentDescription = "Выбрать файлы") }
             IconButton(
                 enabled = !state.isBusy && !state.isRecording,
                 onClick = {
                     photoPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
                 },
-            ) { Icon(Icons.Default.Image, contentDescription = "Выбрать фото") }
+            ) { Icon(Icons.Default.Image, contentDescription = "Выбрать фотографии") }
             IconButton(
                 enabled = !state.isBusy,
                 onClick = {
