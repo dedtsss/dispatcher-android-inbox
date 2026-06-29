@@ -6,4 +6,15 @@
         <item name="android:statusBarColor">#F7F7FA</item>
         <item name="android:windowActionModeOverlay">true</item>
     </style>
+
+    <style name="Theme.DispatcherInbox.Assistant" parent="Theme.DispatcherInbox">
+        <item name="android:windowIsTranslucent">true</item>
+        <item name="android:windowBackground">@android:color/transparent</item>
+        <item name="android:windowNoTitle">true</item>
+        <item name="android:backgroundDimEnabled">false</item>
+        <item name="android:windowDisablePreview">true</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:windowLightStatusBar">false</item>
+    </style>
 </resources>

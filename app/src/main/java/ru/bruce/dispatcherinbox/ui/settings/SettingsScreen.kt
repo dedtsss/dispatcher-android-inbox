@@ -13,6 +13,7 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -27,6 +28,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 fun SettingsScreen(
     viewModel: SettingsViewModel,
     onRequestAssistantRole: () -> Unit,
+    onOpenAssistantSettings: () -> Unit,
+    onOpenDefaultAppsSettings: () -> Unit,
 ) {
     val settings by viewModel.settings.collectAsStateWithLifecycle()
     Column(
@@ -83,12 +86,18 @@ fun SettingsScreen(
         HorizontalDivider()
         Text("Системный ассистент", style = MaterialTheme.typography.titleMedium)
         Text(
-            "Android может не предлагать роль ассистента на некоторых устройствах. В этом случае откройте системные настройки приложений по умолчанию.",
+            "На HyperOS экран обычно называется «Помощник и голосовой ввод». Если системный запрос роли не сработал, откройте выбор ниже и укажите «Приёмник» вместо текущего ассистента.",
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             style = MaterialTheme.typography.bodySmall,
         )
         Button(onClick = onRequestAssistantRole, modifier = Modifier.fillMaxWidth()) {
-            Text("Сделать приложением-ассистентом")
+            Text("Запросить роль ассистента")
+        }
+        OutlinedButton(onClick = onOpenAssistantSettings, modifier = Modifier.fillMaxWidth()) {
+            Text("Открыть выбор ассистента")
+        }
+        OutlinedButton(onClick = onOpenDefaultAppsSettings, modifier = Modifier.fillMaxWidth()) {
+            Text("Открыть приложения по умолчанию")
         }
     }
 }

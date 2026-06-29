@@ -2,6 +2,7 @@ package ru.bruce.dispatcherinbox
 
 import android.app.Application
 import android.app.role.RoleManager
+import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
 import android.os.Build
@@ -67,6 +68,8 @@ open class MainActivity : ComponentActivity() {
                     captureSource = captureSource,
                     onClose = ::finish,
                     onRequestAssistantRole = ::requestAssistantRole,
+                    onOpenAssistantSettings = ::openAssistantSettings,
+                    onOpenDefaultAppsSettings = ::openDefaultAppsSettings,
                 )
             }
         }
@@ -76,22 +79,42 @@ open class MainActivity : ComponentActivity() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             val roleManager = getSystemService(RoleManager::class.java)
             when {
-                !roleManager.isRoleAvailable(RoleManager.ROLE_ASSISTANT) -> openVoiceSettings()
+                !roleManager.isRoleAvailable(RoleManager.ROLE_ASSISTANT) -> openAssistantSettings()
                 roleManager.isRoleHeld(RoleManager.ROLE_ASSISTANT) ->
                     Toast.makeText(this, "Приёмник уже выбран ассистентом", Toast.LENGTH_SHORT).show()
                 else -> roleRequest.launch(roleManager.createRequestRoleIntent(RoleManager.ROLE_ASSISTANT))
             }
         } else {
-            openVoiceSettings()
+            openAssistantSettings()
         }
     }
 
-    private fun openVoiceSettings() {
-        val intent = Intent(Settings.ACTION_VOICE_INPUT_SETTINGS)
-        runCatching { startActivity(intent) }
-            .onFailure {
-                startActivity(Intent(Settings.ACTION_MANAGE_DEFAULT_APPS_SETTINGS))
+    private fun openAssistantSettings() {
+        openFirstAvailable(
+            Intent(Settings.ACTION_VOICE_INPUT_SETTINGS),
+            Intent(Settings.ACTION_MANAGE_DEFAULT_APPS_SETTINGS),
+            Intent(Settings.ACTION_SETTINGS),
+        )
+    }
+
+    private fun openDefaultAppsSettings() {
+        openFirstAvailable(
+            Intent(Settings.ACTION_MANAGE_DEFAULT_APPS_SETTINGS),
+            Intent(Settings.ACTION_VOICE_INPUT_SETTINGS),
+            Intent(Settings.ACTION_SETTINGS),
+        )
+    }
+
+    private fun openFirstAvailable(vararg intents: Intent) {
+        intents.forEach { intent ->
+            try {
+                startActivity(intent)
+                return
+            } catch (_: ActivityNotFoundException) {
+                // Try the next standard Android settings screen.
             }
+        }
+        Toast.makeText(this, "Системные настройки недоступны", Toast.LENGTH_SHORT).show()
     }
 }
 
@@ -109,6 +132,8 @@ private fun InboxApp(
     captureSource: String,
     onClose: () -> Unit,
     onRequestAssistantRole: () -> Unit,
+    onOpenAssistantSettings: () -> Unit,
+    onOpenDefaultAppsSettings: () -> Unit,
 ) {
     val navController = rememberNavController()
     val destinations = listOf(
@@ -165,7 +190,12 @@ private fun InboxApp(
                 val settingsViewModel: SettingsViewModel = viewModel(
                     factory = SettingsViewModel.Factory(container.settingsRepository),
                 )
-                SettingsScreen(settingsViewModel, onRequestAssistantRole)
+                SettingsScreen(
+                    viewModel = settingsViewModel,
+                    onRequestAssistantRole = onRequestAssistantRole,
+                    onOpenAssistantSettings = onOpenAssistantSettings,
+                    onOpenDefaultAppsSettings = onOpenDefaultAppsSettings,
+                )
             }
         }
     }

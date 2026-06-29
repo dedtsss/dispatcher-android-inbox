@@ -21,6 +21,7 @@ import ru.bruce.dispatcherinbox.data.AttachmentDraft
 import ru.bruce.dispatcherinbox.data.InboxRepository
 import ru.bruce.dispatcherinbox.data.InboxSource
 import ru.bruce.dispatcherinbox.data.InboxStatus
+import ru.bruce.dispatcherinbox.data.InboxItemWithAttachments
 import ru.bruce.dispatcherinbox.data.SettingsRepository
 import ru.bruce.dispatcherinbox.util.AudioFeedbackManager
 import ru.bruce.dispatcherinbox.util.VoiceRecorder
@@ -33,6 +34,7 @@ data class CaptureUiState(
     val statusMessage: String? = null,
     val isError: Boolean = false,
     val defaultOpenMode: String? = null,
+    val recentItems: List<InboxItemWithAttachments> = emptyList(),
 )
 
 class CaptureViewModel(
@@ -68,6 +70,7 @@ class CaptureViewModel(
             statusMessage = syncMessage,
             isError = saved?.item?.status == InboxStatus.ERROR || local.isError,
             defaultOpenMode = settings.defaultOpenMode,
+            recentItems = items.take(4),
         )
     }.stateIn(
         viewModelScope,
