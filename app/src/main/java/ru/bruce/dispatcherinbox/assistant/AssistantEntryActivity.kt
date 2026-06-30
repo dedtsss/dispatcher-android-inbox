@@ -62,7 +62,7 @@ private fun AssistantCaptureSheet(
         ModalBottomSheet(
             onDismissRequest = onDismiss,
             sheetState = sheetState,
-            containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.75f),
+            containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.85f),
             scrimColor = Color.Transparent,
             dragHandle = { BottomSheetDefaults.DragHandle() },
         ) {

@@ -45,6 +45,7 @@ fun SettingsScreen(
     onRequestAssistantRole: () -> Unit,
     onOpenAssistantSettings: () -> Unit,
     onOpenDefaultAppsSettings: () -> Unit,
+    onRequestQuickSettingsTile: () -> Unit,
 ) {
     val settings by viewModel.settings.collectAsStateWithLifecycle()
     Column(
@@ -114,6 +115,16 @@ fun SettingsScreen(
         }
         OutlinedButton(onClick = onOpenDefaultAppsSettings, modifier = Modifier.fillMaxWidth()) {
             Text("Открыть приложения по умолчанию")
+        }
+        HorizontalDivider()
+        Text("Быстрый доступ", style = MaterialTheme.typography.titleMedium)
+        Text(
+            "Добавьте плитку «Диспетчер Bruce» в шторку. На защищенном экране телефон сначала попросит разблокировку, затем сразу откроет запись.",
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            style = MaterialTheme.typography.bodySmall,
+        )
+        Button(onClick = onRequestQuickSettingsTile, modifier = Modifier.fillMaxWidth()) {
+            Text("Добавить в шторку")
         }
     }
 }

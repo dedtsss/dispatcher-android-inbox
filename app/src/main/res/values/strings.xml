@@ -2,4 +2,5 @@
     <string name="app_name">Диспетчер Bruce</string>
     <string name="shortcut_quick_note">Быстрая заметка</string>
     <string name="shortcut_quick_note_long">Открыть быструю заметку</string>
+    <string name="quick_settings_tile_label">Диспетчер Bruce</string>
 </resources>

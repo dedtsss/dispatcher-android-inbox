@@ -1,10 +1,13 @@
 package ru.bruce.dispatcherinbox
 
 import android.app.Application
+import android.app.StatusBarManager
 import android.app.role.RoleManager
 import android.content.ActivityNotFoundException
+import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import android.graphics.drawable.Icon
 import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
@@ -26,12 +29,14 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.foundation.layout.padding
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import ru.bruce.dispatcherinbox.data.InboxSource
+import ru.bruce.dispatcherinbox.quick.QuickCaptureTileService
 import ru.bruce.dispatcherinbox.ui.capture.CaptureScreen
 import ru.bruce.dispatcherinbox.ui.capture.CaptureViewModel
 import ru.bruce.dispatcherinbox.ui.queue.QueueScreen
@@ -70,6 +75,7 @@ open class MainActivity : ComponentActivity() {
                     onRequestAssistantRole = ::requestAssistantRole,
                     onOpenAssistantSettings = ::openAssistantSettings,
                     onOpenDefaultAppsSettings = ::openDefaultAppsSettings,
+                    onRequestQuickSettingsTile = ::requestQuickSettingsTile,
                 )
             }
         }
@@ -105,6 +111,37 @@ open class MainActivity : ComponentActivity() {
         )
     }
 
+    private fun requestQuickSettingsTile() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
+            Toast.makeText(
+                this,
+                "Откройте шторку, нажмите «Изменить» и добавьте плитку «Диспетчер Bruce»",
+                Toast.LENGTH_LONG,
+            ).show()
+            return
+        }
+
+        val statusBarManager = getSystemService(StatusBarManager::class.java)
+        statusBarManager.requestAddTileService(
+            ComponentName(this, QuickCaptureTileService::class.java),
+            getString(R.string.quick_settings_tile_label),
+            Icon.createWithResource(this, R.drawable.ic_quick_capture_tile),
+            ContextCompat.getMainExecutor(this),
+        ) { result ->
+            val message = when (result) {
+                StatusBarManager.TILE_ADD_REQUEST_RESULT_TILE_ADDED ->
+                    "Плитка добавлена в шторку"
+                StatusBarManager.TILE_ADD_REQUEST_RESULT_TILE_ALREADY_ADDED ->
+                    "Плитка уже добавлена"
+                StatusBarManager.TILE_ADD_REQUEST_RESULT_TILE_NOT_ADDED ->
+                    "Плитка не добавлена"
+                else ->
+                    "Не удалось добавить автоматически. Добавьте плитку через редактирование шторки"
+            }
+            Toast.makeText(this, message, Toast.LENGTH_LONG).show()
+        }
+    }
+
     private fun openFirstAvailable(vararg intents: Intent) {
         intents.forEach { intent ->
             try {
@@ -134,6 +171,7 @@ private fun InboxApp(
     onRequestAssistantRole: () -> Unit,
     onOpenAssistantSettings: () -> Unit,
     onOpenDefaultAppsSettings: () -> Unit,
+    onRequestQuickSettingsTile: () -> Unit,
 ) {
     val navController = rememberNavController()
     val destinations = listOf(
@@ -195,6 +233,7 @@ private fun InboxApp(
                     onRequestAssistantRole = onRequestAssistantRole,
                     onOpenAssistantSettings = onOpenAssistantSettings,
                     onOpenDefaultAppsSettings = onOpenDefaultAppsSettings,
+                    onRequestQuickSettingsTile = onRequestQuickSettingsTile,
                 )
             }
         }
