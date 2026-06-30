@@ -28,7 +28,7 @@ import ru.bruce.dispatcherinbox.data.InboxSource
 import ru.bruce.dispatcherinbox.ui.theme.DispatcherInboxTheme
 
 class ShareReceiverActivity : ComponentActivity() {
-    private var message by mutableStateOf("Сохраняем в Приёмник…")
+    private var message by mutableStateOf("Сохраняем в Диспетчер Bruce…")
     private var running by mutableStateOf(true)
 
     override fun onCreate(savedInstanceState: Bundle?) {

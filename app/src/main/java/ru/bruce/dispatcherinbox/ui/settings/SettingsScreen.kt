@@ -1,7 +1,10 @@
 package ru.bruce.dispatcherinbox.ui.settings
 
+import android.app.role.RoleManager
 import android.content.ComponentName
-import android.service.voice.VoiceInteractionService
+import android.content.Context
+import android.os.Build
+import android.provider.Settings
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -35,7 +38,6 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
-import ru.bruce.dispatcherinbox.assistant.DispatcherVoiceInteractionService
 
 @Composable
 fun SettingsScreen(
@@ -78,7 +80,6 @@ fun SettingsScreen(
         SettingSwitch("Только по Wi-Fi", settings.wifiOnly, viewModel::setWifiOnly)
         SettingSwitch(
             label = "Удалять внутренние копии после отправки",
-            description = "Оригиналы в Галерее и Файлах не затрагиваются. Удаляется только копия из памяти Приёмника; запись остаётся в журнале.",
             checked = settings.deleteAfterSync,
             onCheckedChange = viewModel::setDeleteAfterSync,
         )
@@ -101,7 +102,7 @@ fun SettingsScreen(
         Text("Системный ассистент", style = MaterialTheme.typography.titleMedium)
         AssistantStatus()
         Text(
-            "На HyperOS экран обычно называется «Помощник и голосовой ввод». Выберите «Приёмник» как цифрового помощника. Голосовой ввод менять не нужно: Приёмник не распознаёт речь.",
+            "На HyperOS экран обычно называется «Помощник и голосовой ввод». Выберите «Диспетчер Bruce» как цифрового помощника. Голосовой ввод менять не нужно: приложение не распознает речь.",
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             style = MaterialTheme.typography.bodySmall,
         )
@@ -122,24 +123,13 @@ private fun SettingSwitch(
     label: String,
     checked: Boolean,
     onCheckedChange: (Boolean) -> Unit,
-    description: String? = null,
 ) {
     Row(
         modifier = Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween,
     ) {
-        Column(modifier = Modifier.weight(1f).padding(end = 12.dp)) {
-            Text(label)
-            description?.let {
-                Text(
-                    it,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(top = 3.dp),
-                )
-            }
-        }
+        Text(label, modifier = Modifier.weight(1f).padding(end = 12.dp))
         Switch(checked = checked, onCheckedChange = onCheckedChange)
     }
 }
@@ -148,10 +138,7 @@ private fun SettingSwitch(
 private fun AssistantStatus() {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
-    fun isActive(): Boolean = VoiceInteractionService.isActiveService(
-        context,
-        ComponentName(context, DispatcherVoiceInteractionService::class.java),
-    )
+    fun isActive(): Boolean = isAssistantRoleHeld(context)
     var active by remember { mutableStateOf(isActive()) }
 
     DisposableEffect(lifecycleOwner) {
@@ -169,10 +156,20 @@ private fun AssistantStatus() {
         modifier = Modifier.fillMaxWidth(),
     ) {
         Text(
-            if (active) "Системный статус: Приёмник активен"
-            else "Системный статус: Приёмник пока не активен",
+            if (active) "Системный статус: Диспетчер Bruce активен"
+            else "Системный статус: Диспетчер Bruce пока не активен",
             modifier = Modifier.padding(horizontal = 12.dp, vertical = 9.dp),
             style = MaterialTheme.typography.bodyMedium,
         )
     }
+}
+
+private fun isAssistantRoleHeld(context: Context): Boolean {
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+        return context.getSystemService(RoleManager::class.java)
+            ?.isRoleHeld(RoleManager.ROLE_ASSISTANT) == true
+    }
+    val selectedComponent = Settings.Secure.getString(context.contentResolver, "assistant")
+        ?.let(ComponentName::unflattenFromString)
+    return selectedComponent?.packageName == context.packageName
 }

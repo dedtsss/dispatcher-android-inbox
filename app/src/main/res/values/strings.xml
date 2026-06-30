@@ -1,6 +1,5 @@
 <resources>
-    <string name="app_name">Приёмник</string>
+    <string name="app_name">Диспетчер Bruce</string>
     <string name="shortcut_quick_note">Быстрая заметка</string>
     <string name="shortcut_quick_note_long">Открыть быструю заметку</string>
-    <string name="voice_service_label">Приёмник — ассистент</string>
 </resources>

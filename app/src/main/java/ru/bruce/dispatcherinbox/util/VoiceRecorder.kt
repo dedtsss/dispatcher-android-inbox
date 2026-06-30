@@ -10,7 +10,7 @@ class VoiceRecorder(private val context: Context) {
     private var outputFile: File? = null
 
     fun start(file: File) {
-        check(recorder == null) { "Запись уже идёт" }
+        check(recorder == null) { "Запись уже идет" }
         val mediaRecorder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             MediaRecorder(context)
         } else {
@@ -50,6 +50,10 @@ class VoiceRecorder(private val context: Context) {
         }
         return file
     }
+
+    fun currentAmplitude(): Int = runCatching {
+        recorder?.maxAmplitude ?: 0
+    }.getOrDefault(0)
 
     fun cancel() {
         val file = outputFile

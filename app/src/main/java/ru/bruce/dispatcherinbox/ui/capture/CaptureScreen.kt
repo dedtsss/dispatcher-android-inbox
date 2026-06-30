@@ -5,6 +5,9 @@ import android.content.pm.PackageManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -47,6 +50,9 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
@@ -116,7 +122,7 @@ fun CaptureScreen(
             .padding(horizontal = if (compact) 18.dp else 20.dp, vertical = 14.dp),
     ) {
         Text(
-            if (compact) "Приёмник" else "Быстрая запись",
+            if (compact) "Диспетчер Bruce" else "Быстрая запись",
             style = MaterialTheme.typography.headlineSmall,
         )
         Text(
@@ -181,7 +187,12 @@ fun CaptureScreen(
                     else MaterialTheme.colorScheme.primary,
                 )
             }
-            state.statusMessage?.let { message ->
+            if (state.isRecording) {
+                RecordingLevelIndicator(
+                    amplitude = state.recordingAmplitude,
+                    modifier = Modifier.weight(1f),
+                )
+            } else state.statusMessage?.let { message ->
                 Surface(
                     color = if (state.isError) MaterialTheme.colorScheme.errorContainer
                     else MaterialTheme.colorScheme.secondaryContainer,
@@ -214,6 +225,61 @@ fun CaptureScreen(
             modifier = Modifier.padding(top = 16.dp),
         )
         Spacer(Modifier.height(if (compact) 18.dp else 8.dp))
+    }
+}
+
+@Composable
+private fun RecordingLevelIndicator(
+    amplitude: Float,
+    modifier: Modifier = Modifier,
+) {
+    val animatedAmplitude by animateFloatAsState(
+        targetValue = amplitude.coerceIn(0f, 1f),
+        animationSpec = tween(durationMillis = 80),
+        label = "recordingAmplitude",
+    )
+    val indicatorColor = MaterialTheme.colorScheme.onErrorContainer
+
+    Surface(
+        color = MaterialTheme.colorScheme.errorContainer,
+        shape = RoundedCornerShape(12.dp),
+        modifier = modifier,
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 11.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(9.dp),
+        ) {
+            Canvas(
+                modifier = Modifier
+                    .width(54.dp)
+                    .height(22.dp),
+            ) {
+                val factors = floatArrayOf(0.48f, 0.72f, 0.9f, 1f, 0.84f, 0.66f, 0.44f)
+                val barWidth = size.width / 15f
+                val gap = barWidth
+                factors.forEachIndexed { index, factor ->
+                    val heightFraction = (0.16f + animatedAmplitude * factor * 0.84f)
+                        .coerceIn(0.16f, 1f)
+                    val barHeight = size.height * heightFraction
+                    drawRoundRect(
+                        color = indicatorColor,
+                        topLeft = Offset(
+                            x = index * (barWidth + gap),
+                            y = (size.height - barHeight) / 2f,
+                        ),
+                        size = Size(barWidth, barHeight),
+                        cornerRadius = CornerRadius(barWidth / 2f, barWidth / 2f),
+                    )
+                }
+            }
+            Text(
+                "Запись идет",
+                style = MaterialTheme.typography.bodySmall,
+                color = indicatorColor,
+                maxLines = 1,
+            )
+        }
     }
 }
 
@@ -395,7 +461,7 @@ private fun recentSummary(entry: InboxItemWithAttachments): String {
     entry.item.text?.takeIf { it.isNotBlank() }?.let { return it }
     val first = entry.attachments.firstOrNull()?.originalName ?: "Запись без названия"
     val remaining = entry.attachments.size - 1
-    return if (remaining > 0) "$first и ещё $remaining" else first
+    return if (remaining > 0) "$first и еще $remaining" else first
 }
 
 private fun recentTypeLabel(entry: InboxItemWithAttachments): String {

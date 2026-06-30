@@ -5,6 +5,11 @@ plugins {
     id("org.jetbrains.kotlin.plugin.compose")
 }
 
+val signingStoreFile = providers.environmentVariable("DISPATCHER_SIGNING_STORE_FILE").orNull
+val signingStorePassword = providers.environmentVariable("DISPATCHER_SIGNING_STORE_PASSWORD").orNull
+val signingKeyAlias = providers.environmentVariable("DISPATCHER_SIGNING_KEY_ALIAS").orNull
+val signingKeyPassword = providers.environmentVariable("DISPATCHER_SIGNING_KEY_PASSWORD").orNull
+
 android {
     namespace = "ru.bruce.dispatcherinbox"
     compileSdk = 36
@@ -13,19 +18,39 @@ android {
         applicationId = "ru.bruce.dispatcherinbox"
         minSdk = 26
         targetSdk = 36
-        versionCode = 3
-        versionName = "0.3.0"
+        versionCode = 4
+        versionName = "0.4.0"
         manifestPlaceholders["usesCleartextTraffic"] = "false"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
+    val stableSigningConfig = if (
+        listOf(
+            signingStoreFile,
+            signingStorePassword,
+            signingKeyAlias,
+            signingKeyPassword,
+        ).all { !it.isNullOrBlank() } && file(signingStoreFile!!).isFile
+    ) {
+        signingConfigs.create("stable") {
+            storeFile = file(signingStoreFile)
+            storePassword = signingStorePassword
+            keyAlias = signingKeyAlias
+            keyPassword = signingKeyPassword
+        }
+    } else {
+        null
+    }
+
     buildTypes {
         debug {
             manifestPlaceholders["usesCleartextTraffic"] = "true"
+            stableSigningConfig?.let { signingConfig = it }
         }
         release {
             isMinifyEnabled = false
+            stableSigningConfig?.let { signingConfig = it }
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",

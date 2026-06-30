@@ -47,7 +47,7 @@ open class MainActivity : ComponentActivity() {
     private val roleRequest = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
         val message = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             val roles = getSystemService(RoleManager::class.java)
-            if (roles.isRoleHeld(RoleManager.ROLE_ASSISTANT)) "Приёмник выбран ассистентом"
+            if (roles.isRoleHeld(RoleManager.ROLE_ASSISTANT)) "Диспетчер Bruce выбран ассистентом"
             else "Роль ассистента не назначена"
         } else {
             "Проверьте выбор ассистента в настройках Android"
@@ -81,7 +81,7 @@ open class MainActivity : ComponentActivity() {
             when {
                 !roleManager.isRoleAvailable(RoleManager.ROLE_ASSISTANT) -> openAssistantSettings()
                 roleManager.isRoleHeld(RoleManager.ROLE_ASSISTANT) ->
-                    Toast.makeText(this, "Приёмник уже выбран ассистентом", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(this, "Диспетчер Bruce уже выбран ассистентом", Toast.LENGTH_SHORT).show()
                 else -> roleRequest.launch(roleManager.createRequestRoleIntent(RoleManager.ROLE_ASSISTANT))
             }
         } else {

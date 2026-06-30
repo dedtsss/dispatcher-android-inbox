@@ -7,7 +7,9 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -30,6 +32,7 @@ data class CaptureUiState(
     val text: String = "",
     val attachments: List<AttachmentDraft> = emptyList(),
     val isRecording: Boolean = false,
+    val recordingAmplitude: Float = 0f,
     val isBusy: Boolean = false,
     val statusMessage: String? = null,
     val isError: Boolean = false,
@@ -49,6 +52,7 @@ class CaptureViewModel(
     private val closeEvents = Channel<Unit>(Channel.BUFFERED)
     private var closeAfterSave = false
     private var lastSavedId: String? = null
+    private var amplitudeJob: Job? = null
 
     val close = closeEvents.receiveAsFlow()
 
@@ -137,9 +141,11 @@ class CaptureViewModel(
             audioFeedback.playStartSound()
             localState.value = localState.value.copy(
                 isRecording = true,
-                statusMessage = "Идёт запись…",
+                recordingAmplitude = 0f,
+                statusMessage = "Идет запись…",
                 isError = false,
             )
+            startAmplitudeUpdates()
         }.onFailure {
             audioFeedback.playErrorSound()
             showError("Не удалось начать запись")
@@ -148,7 +154,12 @@ class CaptureViewModel(
 
     fun stopRecordingAndSave() {
         if (!localState.value.isRecording) return
-        localState.value = localState.value.copy(isRecording = false, isBusy = true)
+        stopAmplitudeUpdates()
+        localState.value = localState.value.copy(
+            isRecording = false,
+            recordingAmplitude = 0f,
+            isBusy = true,
+        )
         viewModelScope.launch {
             try {
                 val file = withContext(Dispatchers.IO) { recorder.stop() }
@@ -192,15 +203,37 @@ class CaptureViewModel(
     }
 
     private fun showError(message: String) {
+        stopAmplitudeUpdates()
         localState.value = localState.value.copy(
             isBusy = false,
             isRecording = false,
+            recordingAmplitude = 0f,
             statusMessage = message,
             isError = true,
         )
     }
 
+    private fun startAmplitudeUpdates() {
+        amplitudeJob?.cancel()
+        amplitudeJob = viewModelScope.launch {
+            var smoothed = 0f
+            while (localState.value.isRecording) {
+                val raw = recorder.currentAmplitude().coerceIn(0, 32_767) / 32_767f
+                val visibleLevel = kotlin.math.sqrt(raw)
+                smoothed = smoothed * 0.55f + visibleLevel * 0.45f
+                localState.value = localState.value.copy(recordingAmplitude = smoothed)
+                delay(80)
+            }
+        }
+    }
+
+    private fun stopAmplitudeUpdates() {
+        amplitudeJob?.cancel()
+        amplitudeJob = null
+    }
+
     override fun onCleared() {
+        stopAmplitudeUpdates()
         if (localState.value.isRecording) recorder.cancel()
         super.onCleared()
     }
