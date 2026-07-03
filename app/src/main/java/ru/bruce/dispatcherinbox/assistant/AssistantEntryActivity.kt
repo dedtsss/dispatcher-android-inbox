@@ -1,6 +1,8 @@
 package ru.bruce.dispatcherinbox.assistant
 
+import android.content.Intent
 import android.os.Bundle
+import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -12,7 +14,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.material3.BottomSheetDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
@@ -21,6 +22,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import ru.bruce.dispatcherinbox.DispatcherApplication
+import ru.bruce.dispatcherinbox.MainActivity
 import ru.bruce.dispatcherinbox.data.InboxSource
 import ru.bruce.dispatcherinbox.ui.capture.CaptureScreen
 import ru.bruce.dispatcherinbox.ui.capture.CaptureViewModel
@@ -30,6 +32,8 @@ class AssistantEntryActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        val isAssistantMode = intent.action == Intent.ACTION_ASSIST
+        configureAssistantWindow(isAssistantMode)
         val container = (application as DispatcherApplication).container
         setContent {
             DispatcherInboxTheme {
@@ -42,27 +46,61 @@ class AssistantEntryActivity : ComponentActivity() {
                             InboxSource.ASSISTANT,
                         ),
                     ),
+                    isAssistantMode = isAssistantMode,
                     onDismiss = ::finish,
+                    onOpenSettings = { openMainApp("settings") },
+                    onOpenQueue = { openMainApp("queue") },
                 )
             }
         }
     }
+
+    private fun configureAssistantWindow(isAssistantMode: Boolean) {
+        if (!isAssistantMode) return
+        window.addFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND)
+        window.attributes = window.attributes.apply {
+            dimAmount = AssistantWindowStyle.backgroundDim(isAssistantMode)
+            alpha = 1f
+        }
+    }
+
+    private fun openMainApp(destination: String) {
+        startActivity(
+            Intent(this, MainActivity::class.java)
+                .putExtra(MainActivity.EXTRA_START_DESTINATION, destination),
+        )
+        finish()
+    }
+}
+
+private object AssistantWindowStyle {
+    private const val ASSISTANT_PANEL_OPACITY = 0.94f
+    private const val ASSISTANT_BACKGROUND_DIM = 0.42f
+
+    fun panelAlpha(isAssistantMode: Boolean): Float =
+        if (isAssistantMode) ASSISTANT_PANEL_OPACITY else 1f
+
+    fun backgroundDim(isAssistantMode: Boolean): Float =
+        if (isAssistantMode) ASSISTANT_BACKGROUND_DIM else 0f
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun AssistantCaptureSheet(
     viewModel: CaptureViewModel,
+    isAssistantMode: Boolean,
     onDismiss: () -> Unit,
+    onOpenSettings: () -> Unit,
+    onOpenQueue: () -> Unit,
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
     BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
-        val sheetHeight = (maxHeight * 0.74f).coerceIn(440.dp, 680.dp)
+        val sheetHeight = (maxHeight * 0.90f).coerceAtMost(760.dp)
         ModalBottomSheet(
             onDismissRequest = onDismiss,
             sheetState = sheetState,
-            containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.85f),
+            containerColor = Color.Transparent,
             scrimColor = Color.Transparent,
             dragHandle = { BottomSheetDefaults.DragHandle() },
         ) {
@@ -77,6 +115,10 @@ private fun AssistantCaptureSheet(
                     forceVoiceStart = true,
                     onClose = onDismiss,
                     compact = true,
+                    isAssistantMode = isAssistantMode,
+                    panelAlpha = AssistantWindowStyle.panelAlpha(isAssistantMode),
+                    onOpenSettings = onOpenSettings,
+                    onOpenQueue = onOpenQueue,
                 )
             }
         }

@@ -43,6 +43,7 @@ import ru.bruce.dispatcherinbox.ui.queue.QueueScreen
 import ru.bruce.dispatcherinbox.ui.queue.QueueViewModel
 import ru.bruce.dispatcherinbox.ui.settings.SettingsScreen
 import ru.bruce.dispatcherinbox.ui.settings.SettingsViewModel
+import ru.bruce.dispatcherinbox.ui.theme.DispatcherBackground
 import ru.bruce.dispatcherinbox.ui.theme.DispatcherInboxTheme
 
 open class MainActivity : ComponentActivity() {
@@ -64,6 +65,9 @@ open class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         val container = (application as DispatcherApplication).container
+        val startDestination = intent.getStringExtra(EXTRA_START_DESTINATION)
+            ?.takeIf { it == "capture" || it == "queue" || it == "settings" }
+            ?: "capture"
         setContent {
             DispatcherInboxTheme {
                 InboxApp(
@@ -71,6 +75,7 @@ open class MainActivity : ComponentActivity() {
                     container = container,
                     forceVoiceStart = forceVoiceStart,
                     captureSource = captureSource,
+                    startDestination = startDestination,
                     onClose = ::finish,
                     onRequestAssistantRole = ::requestAssistantRole,
                     onOpenAssistantSettings = ::openAssistantSettings,
@@ -153,6 +158,10 @@ open class MainActivity : ComponentActivity() {
         }
         Toast.makeText(this, "Системные настройки недоступны", Toast.LENGTH_SHORT).show()
     }
+
+    companion object {
+        const val EXTRA_START_DESTINATION = "ru.bruce.dispatcherinbox.START_DESTINATION"
+    }
 }
 
 private data class Destination(
@@ -167,6 +176,7 @@ private fun InboxApp(
     container: AppContainer,
     forceVoiceStart: Boolean,
     captureSource: String,
+    startDestination: String,
     onClose: () -> Unit,
     onRequestAssistantRole: () -> Unit,
     onOpenAssistantSettings: () -> Unit,
@@ -183,28 +193,31 @@ private fun InboxApp(
     val currentRoute = currentEntry?.destination?.route
 
     Scaffold(
+        containerColor = DispatcherBackground,
         bottomBar = {
-            NavigationBar {
-                destinations.forEach { destination ->
-                    NavigationBarItem(
-                        selected = currentRoute == destination.route,
-                        onClick = {
-                            navController.navigate(destination.route) {
-                                popUpTo("capture") { saveState = true }
-                                launchSingleTop = true
-                                restoreState = true
-                            }
-                        },
-                        icon = { Icon(destination.icon, contentDescription = null) },
-                        label = { Text(destination.label) },
-                    )
+            if (currentRoute != null && currentRoute != "capture") {
+                NavigationBar(containerColor = androidx.compose.material3.MaterialTheme.colorScheme.surface) {
+                    destinations.forEach { destination ->
+                        NavigationBarItem(
+                            selected = currentRoute == destination.route,
+                            onClick = {
+                                navController.navigate(destination.route) {
+                                    popUpTo("capture") { saveState = true }
+                                    launchSingleTop = true
+                                    restoreState = true
+                                }
+                            },
+                            icon = { Icon(destination.icon, contentDescription = null) },
+                            label = { Text(destination.label) },
+                        )
+                    }
                 }
             }
         },
     ) { padding ->
         NavHost(
             navController = navController,
-            startDestination = "capture",
+            startDestination = startDestination,
             modifier = Modifier.padding(padding),
         ) {
             composable("capture") {
@@ -216,7 +229,15 @@ private fun InboxApp(
                         captureSource,
                     ),
                 )
-                CaptureScreen(captureViewModel, forceVoiceStart, onClose)
+                CaptureScreen(
+                    viewModel = captureViewModel,
+                    forceVoiceStart = forceVoiceStart,
+                    onClose = onClose,
+                    isAssistantMode = false,
+                    panelAlpha = 1f,
+                    onOpenSettings = { navController.navigate("settings") },
+                    onOpenQueue = { navController.navigate("queue") },
+                )
             }
             composable("queue") {
                 val queueViewModel: QueueViewModel = viewModel(
