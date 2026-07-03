@@ -68,6 +68,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -78,6 +79,8 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.SpanStyle
@@ -90,6 +93,7 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import ru.bruce.dispatcherinbox.BuildConfig
 import ru.bruce.dispatcherinbox.data.AttachmentDraft
+import ru.bruce.dispatcherinbox.data.DefaultOpenMode
 import ru.bruce.dispatcherinbox.data.InboxItemWithAttachments
 import ru.bruce.dispatcherinbox.data.InboxStatus
 import ru.bruce.dispatcherinbox.ui.theme.DispatcherBackground
@@ -109,7 +113,6 @@ private const val NOTE_MAX_LENGTH = 2_000
 @Composable
 fun CaptureScreen(
     viewModel: CaptureViewModel,
-    forceVoiceStart: Boolean,
     onClose: () -> Unit,
     modifier: Modifier = Modifier,
     compact: Boolean = false,
@@ -122,6 +125,7 @@ fun CaptureScreen(
     val context = LocalContext.current
     var requestedAutoStart by rememberSaveable { mutableStateOf(false) }
     var showAbout by rememberSaveable { mutableStateOf(false) }
+    val noteFocusRequester = remember { FocusRequester() }
 
     val audioPermission = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission(),
@@ -147,13 +151,26 @@ fun CaptureScreen(
         }
     }
 
-    LaunchedEffect(state.defaultOpenMode, forceVoiceStart) {
-        if (!requestedAutoStart && state.defaultOpenMode != null &&
-            (forceVoiceStart || state.defaultOpenMode == "voice")
-        ) {
+    LaunchedEffect(
+        state.defaultOpenMode,
+        state.autoStartAssistantRecording,
+        isAssistantMode,
+    ) {
+        if (!requestedAutoStart && state.defaultOpenMode != null) {
             requestedAutoStart = true
-            startWithPermission()
+            if (
+                CaptureLaunchPolicy.shouldAutoStartRecording(
+                    isAssistantMode = isAssistantMode,
+                    defaultOpenMode = state.defaultOpenMode,
+                    autoStartAssistantRecording = state.autoStartAssistantRecording,
+                )
+            ) {
+                startWithPermission()
+            }
         }
+    }
+    LaunchedEffect(state.defaultOpenMode) {
+        if (state.defaultOpenMode == DefaultOpenMode.TEXT) noteFocusRequester.requestFocus()
     }
     LaunchedEffect(viewModel) { viewModel.close.collect { onClose() } }
 
@@ -180,6 +197,7 @@ fun CaptureScreen(
                 ),
             shape = RoundedCornerShape(if (compact) 28.dp else 32.dp),
             color = MaterialTheme.colorScheme.surface.copy(alpha = panelAlpha),
+            contentColor = MaterialTheme.colorScheme.onSurface,
             border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.72f)),
             tonalElevation = 2.dp,
         ) {
@@ -197,6 +215,7 @@ fun CaptureScreen(
                     onValueChange = viewModel::setText,
                     enabled = !state.isBusy,
                     height = noteHeight,
+                    focusRequester = noteFocusRequester,
                 )
 
                 if (state.attachments.isNotEmpty()) {
@@ -212,6 +231,7 @@ fun CaptureScreen(
 
                 ActionButtons(
                     isRecording = state.isRecording,
+                    voiceModeSelected = state.defaultOpenMode == DefaultOpenMode.VOICE,
                     isBusy = state.isBusy,
                     onVoiceClick = {
                         if (state.isRecording) viewModel.stopRecordingAndSave() else startWithPermission()
@@ -286,6 +306,7 @@ private fun CaptureHeader(onOpenSettings: () -> Unit) {
             modifier = Modifier.weight(1f),
             style = MaterialTheme.typography.headlineSmall,
             fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.onSurface,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
         )
@@ -305,6 +326,7 @@ private fun NoteField(
     onValueChange: (String) -> Unit,
     enabled: Boolean,
     height: androidx.compose.ui.unit.Dp,
+    focusRequester: FocusRequester,
 ) {
     OutlinedTextField(
         value = value,
@@ -320,6 +342,7 @@ private fun NoteField(
         },
         modifier = Modifier
             .fillMaxWidth()
+            .focusRequester(focusRequester)
             .height(height),
         shape = RoundedCornerShape(22.dp),
         colors = OutlinedTextFieldDefaults.colors(
@@ -328,6 +351,12 @@ private fun NoteField(
             focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.36f),
             unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.24f),
             cursorColor = MaterialTheme.colorScheme.primary,
+            focusedTextColor = MaterialTheme.colorScheme.onSurface,
+            unfocusedTextColor = MaterialTheme.colorScheme.onSurface,
+            focusedPlaceholderColor = MaterialTheme.colorScheme.onSurfaceVariant,
+            unfocusedPlaceholderColor = MaterialTheme.colorScheme.onSurfaceVariant,
+            focusedSupportingTextColor = MaterialTheme.colorScheme.onSurfaceVariant,
+            unfocusedSupportingTextColor = MaterialTheme.colorScheme.onSurfaceVariant,
         ),
     )
 }
@@ -335,6 +364,7 @@ private fun NoteField(
 @Composable
 private fun ActionButtons(
     isRecording: Boolean,
+    voiceModeSelected: Boolean,
     isBusy: Boolean,
     onVoiceClick: () -> Unit,
     onFileClick: () -> Unit,
@@ -348,7 +378,7 @@ private fun ActionButtons(
             text = if (isRecording) "Стоп" else "Голос",
             icon = if (isRecording) Icons.Default.Stop else Icons.Default.Mic,
             enabled = !isBusy,
-            active = isRecording,
+            active = isRecording || voiceModeSelected,
             onClick = onVoiceClick,
             modifier = Modifier.weight(1f),
         )
@@ -444,11 +474,13 @@ fun DynamicSendButton(
         contentPadding = ButtonDefaults.ButtonWithIconContentPadding,
     ) {
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            AudioWaveform(
-                isRecording = isRecording,
-                audioLevel = audioLevel,
-                modifier = Modifier.fillMaxSize(),
-            )
+            if (isRecording) {
+                AudioWaveform(
+                    isRecording = true,
+                    audioLevel = audioLevel,
+                    modifier = Modifier.fillMaxSize(),
+                )
+            }
             Surface(
                 color = MaterialTheme.colorScheme.surface.copy(alpha = 0.82f),
                 shape = RoundedCornerShape(20.dp),
@@ -475,9 +507,11 @@ fun AudioWaveform(
     audioLevel: Float,
     modifier: Modifier = Modifier,
 ) {
+    if (!isRecording) return
+
     val level by animateFloatAsState(
-        targetValue = if (isRecording) audioLevel.coerceIn(0f, 1f) else 0.08f,
-        animationSpec = tween(80),
+        targetValue = if (isRecording) audioLevel.coerceIn(0f, 1f) else 0f,
+        animationSpec = tween(220),
         label = "waveformLevel",
     )
     val phase = if (isRecording) {
@@ -485,7 +519,7 @@ fun AudioWaveform(
         val animatedPhase by transition.animateFloat(
             initialValue = 0f,
             targetValue = (2f * PI).toFloat(),
-            animationSpec = infiniteRepeatable(tween(720, easing = LinearEasing)),
+            animationSpec = infiniteRepeatable(tween(1_400, easing = LinearEasing)),
             label = "waveformPhase",
         )
         animatedPhase
@@ -496,13 +530,13 @@ fun AudioWaveform(
 
     Canvas(
         modifier = modifier.semantics {
-            contentDescription = if (isRecording) "Индикатор уровня записи" else "Декоративная звуковая волна"
+            contentDescription = "Индикатор уровня записи"
         },
     ) {
         val count = 44
         val gap = size.width / (count * 2.05f)
         val barWidth = gap * 0.62f
-        val activeLevel = if (isRecording) (0.24f + level * 0.76f) else 0.12f
+        val activeLevel = (0.14f + level * 0.86f).coerceIn(0.14f, 1f)
         repeat(count) { index ->
             val centerX = (index + 0.5f) * size.width / count
             val normalizedX = centerX / size.width
@@ -512,7 +546,7 @@ fun AudioWaveform(
             val edgeFade = (distanceFromCenter / 0.5f).coerceIn(0f, 1f)
             val centerFade = ((distanceFromCenter - 0.18f) / 0.14f).coerceIn(0f, 1f)
             val motion = if (isRecording) phase else 0f
-            val pattern = (0.55f + 0.45f * abs(sin(index * 0.74f + motion)))
+            val pattern = (0.38f + 0.62f * abs(sin(index * 0.62f + motion)))
             val envelope = (1f - abs(normalizedX - 0.5f) * 0.72f).coerceAtLeast(0.38f)
             val barHeight = (size.height * (0.10f + activeLevel * pattern * envelope))
                 .coerceIn(size.height * 0.10f, size.height * 0.84f)
@@ -582,7 +616,11 @@ private fun RecentJournal(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text("Журнал", style = MaterialTheme.typography.titleMedium)
+            Text(
+                "Журнал",
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
             TextButton(onClick = onOpenQueue) { Text("Все") }
         }
         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
@@ -629,6 +667,7 @@ private fun RecentJournalRow(entry: InboxItemWithAttachments) {
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
             style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurface,
         )
         Text(
             text = formatTime(item.createdAt),

@@ -2,6 +2,9 @@ package ru.bruce.dispatcherinbox
 
 import android.app.Application
 import androidx.room.Room
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import ru.bruce.dispatcherinbox.data.AttachmentStore
 import ru.bruce.dispatcherinbox.data.InboxDao
 import ru.bruce.dispatcherinbox.data.InboxDatabase
@@ -23,6 +26,8 @@ class DispatcherApplication : Application() {
 }
 
 class AppContainer(application: Application) {
+    val applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+
     private val database = Room.databaseBuilder(
         application,
         InboxDatabase::class.java,

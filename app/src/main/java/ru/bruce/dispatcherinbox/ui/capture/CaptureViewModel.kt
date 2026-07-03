@@ -6,6 +6,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
@@ -18,7 +19,6 @@ import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import ru.bruce.dispatcherinbox.data.AppSettings
 import ru.bruce.dispatcherinbox.data.AttachmentDraft
 import ru.bruce.dispatcherinbox.data.InboxRepository
 import ru.bruce.dispatcherinbox.data.InboxSource
@@ -26,6 +26,7 @@ import ru.bruce.dispatcherinbox.data.InboxStatus
 import ru.bruce.dispatcherinbox.data.InboxItemWithAttachments
 import ru.bruce.dispatcherinbox.data.SettingsRepository
 import ru.bruce.dispatcherinbox.util.AudioFeedbackManager
+import ru.bruce.dispatcherinbox.util.RecordingSafetyTimer
 import ru.bruce.dispatcherinbox.util.VoiceRecorder
 
 data class CaptureUiState(
@@ -37,6 +38,7 @@ data class CaptureUiState(
     val statusMessage: String? = null,
     val isError: Boolean = false,
     val defaultOpenMode: String? = null,
+    val autoStartAssistantRecording: Boolean = false,
     val recentItems: List<InboxItemWithAttachments> = emptyList(),
 )
 
@@ -45,6 +47,7 @@ class CaptureViewModel(
     private val repository: InboxRepository,
     settingsRepository: SettingsRepository,
     private val source: String,
+    private val applicationScope: CoroutineScope,
 ) : AndroidViewModel(application) {
     private val recorder = VoiceRecorder(application)
     private val audioFeedback = AudioFeedbackManager()
@@ -53,6 +56,11 @@ class CaptureViewModel(
     private var closeAfterSave = false
     private var lastSavedId: String? = null
     private var amplitudeJob: Job? = null
+    private val recordingSafetyTimer = RecordingSafetyTimer(
+        scope = applicationScope,
+        timeoutMillis = RECORDING_TIMEOUT_MILLIS,
+        onTimeout = { stopRecordingAndSave(autoStopped = true) },
+    )
 
     val close = closeEvents.receiveAsFlow()
 
@@ -74,6 +82,7 @@ class CaptureViewModel(
             statusMessage = syncMessage,
             isError = saved?.item?.status == InboxStatus.ERROR || local.isError,
             defaultOpenMode = settings.defaultOpenMode,
+            autoStartAssistantRecording = settings.autoStartAssistantRecording,
             recentItems = items.take(4),
         )
     }.stateIn(
@@ -146,6 +155,7 @@ class CaptureViewModel(
                 isError = false,
             )
             startAmplitudeUpdates()
+            recordingSafetyTimer.start()
         }.onFailure {
             audioFeedback.playErrorSound()
             showError("Не удалось начать запись")
@@ -153,19 +163,36 @@ class CaptureViewModel(
     }
 
     fun stopRecordingAndSave() {
+        stopRecordingAndSave(autoStopped = false)
+    }
+
+    private fun stopRecordingAndSave(autoStopped: Boolean) {
         if (!localState.value.isRecording) return
+        if (!autoStopped) recordingSafetyTimer.cancel()
         stopAmplitudeUpdates()
+        val text = localState.value.text
+        val drafts = localState.value.attachments
         localState.value = localState.value.copy(
             isRecording = false,
             recordingAmplitude = 0f,
             isBusy = true,
+            statusMessage = if (autoStopped) "Запись остановлена автоматически" else "Сохраняем…",
         )
-        viewModelScope.launch {
+        applicationScope.launch {
             try {
                 val file = withContext(Dispatchers.IO) { recorder.stop() }
                 audioFeedback.playStopSound()
                 val voice = repository.voiceDraft(file)
-                saveInternal(localState.value.attachments + voice)
+                saveInternal(
+                    text = text,
+                    drafts = drafts + voice,
+                    successMessage = if (autoStopped) {
+                        "Запись остановлена автоматически"
+                    } else {
+                        "В очереди"
+                    },
+                    trackSavedItem = !autoStopped,
+                )
             } catch (error: Exception) {
                 audioFeedback.playErrorSound()
                 showError(error.message ?: "Не удалось сохранить запись")
@@ -180,22 +207,32 @@ class CaptureViewModel(
 
     fun save() {
         if (localState.value.isBusy || localState.value.isRecording) return
-        viewModelScope.launch { saveInternal(localState.value.attachments) }
+        val text = localState.value.text
+        val drafts = localState.value.attachments
+        viewModelScope.launch { saveInternal(text, drafts) }
     }
 
-    private suspend fun saveInternal(drafts: List<AttachmentDraft>) {
-        val text = localState.value.text
+    private suspend fun saveInternal(
+        text: String,
+        drafts: List<AttachmentDraft>,
+        successMessage: String = "В очереди",
+        trackSavedItem: Boolean = true,
+    ) {
         if (text.isBlank() && drafts.isEmpty()) {
             showError("Введите текст или добавьте файл")
             return
         }
-        localState.value = localState.value.copy(isBusy = true, statusMessage = "Сохраняем…")
+        localState.value = localState.value.copy(
+            isBusy = true,
+            statusMessage = if (successMessage == "В очереди") "Сохраняем…" else successMessage,
+        )
         runCatching { repository.save(text, drafts, source) }
             .onSuccess { item ->
-                lastSavedId = item.id
+                lastSavedId = item.id.takeIf { trackSavedItem }
                 localState.value = CaptureUiState(
-                    statusMessage = "В очереди",
+                    statusMessage = successMessage,
                     defaultOpenMode = localState.value.defaultOpenMode,
+                    autoStartAssistantRecording = localState.value.autoStartAssistantRecording,
                 )
                 if (closeAfterSave) closeEvents.trySend(Unit)
             }
@@ -203,6 +240,7 @@ class CaptureViewModel(
     }
 
     private fun showError(message: String) {
+        recordingSafetyTimer.cancel()
         stopAmplitudeUpdates()
         localState.value = localState.value.copy(
             isBusy = false,
@@ -220,9 +258,9 @@ class CaptureViewModel(
             while (localState.value.isRecording) {
                 val raw = recorder.currentAmplitude().coerceIn(0, 32_767) / 32_767f
                 val visibleLevel = kotlin.math.sqrt(raw)
-                smoothed = smoothed * 0.55f + visibleLevel * 0.45f
+                smoothed = smoothed * 0.78f + visibleLevel * 0.22f
                 localState.value = localState.value.copy(recordingAmplitude = smoothed)
-                delay(80)
+                delay(100)
             }
         }
     }
@@ -234,7 +272,7 @@ class CaptureViewModel(
 
     override fun onCleared() {
         stopAmplitudeUpdates()
-        if (localState.value.isRecording) recorder.cancel()
+        if (!localState.value.isRecording) recordingSafetyTimer.cancel()
         super.onCleared()
     }
 
@@ -243,9 +281,20 @@ class CaptureViewModel(
         private val repository: InboxRepository,
         private val settingsRepository: SettingsRepository,
         private val source: String = InboxSource.MANUAL,
+        private val applicationScope: CoroutineScope,
     ) : ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST")
         override fun <T : ViewModel> create(modelClass: Class<T>): T =
-            CaptureViewModel(application, repository, settingsRepository, source) as T
+            CaptureViewModel(
+                application,
+                repository,
+                settingsRepository,
+                source,
+                applicationScope,
+            ) as T
+    }
+
+    companion object {
+        const val RECORDING_TIMEOUT_MILLIS = 30_000L
     }
 }

@@ -23,10 +23,11 @@ class InboxRepository(
         drafts: List<AttachmentDraft>,
         source: String = InboxSource.MANUAL,
     ): InboxItemEntity {
-        val item = factory.create(text, drafts, source)
+        val plan = factory.createPlan(text, drafts, source)
+        val item = plan.item
         val attachments = mutableListOf<InboxAttachmentEntity>()
         try {
-            drafts.forEach { attachments += attachmentStore.commit(item.id, it) }
+            plan.attachments.forEach { attachments += attachmentStore.commit(item.id, it) }
             dao.insertItemWithAttachments(item, attachments)
         } catch (error: Exception) {
             attachmentStore.deleteAttachments(attachments)

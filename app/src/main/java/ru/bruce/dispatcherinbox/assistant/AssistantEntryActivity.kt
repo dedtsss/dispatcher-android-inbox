@@ -44,6 +44,7 @@ class AssistantEntryActivity : ComponentActivity() {
                             container.inboxRepository,
                             container.settingsRepository,
                             InboxSource.ASSISTANT,
+                            container.applicationScope,
                         ),
                     ),
                     isAssistantMode = isAssistantMode,
@@ -74,7 +75,7 @@ class AssistantEntryActivity : ComponentActivity() {
 }
 
 private object AssistantWindowStyle {
-    private const val ASSISTANT_PANEL_OPACITY = 0.94f
+    private const val ASSISTANT_PANEL_OPACITY = 0.97f
     private const val ASSISTANT_BACKGROUND_DIM = 0.42f
 
     fun panelAlpha(isAssistantMode: Boolean): Float =
@@ -101,6 +102,7 @@ private fun AssistantCaptureSheet(
             onDismissRequest = onDismiss,
             sheetState = sheetState,
             containerColor = Color.Transparent,
+            contentColor = androidx.compose.material3.MaterialTheme.colorScheme.onSurface,
             scrimColor = Color.Transparent,
             dragHandle = { BottomSheetDefaults.DragHandle() },
         ) {
@@ -112,7 +114,6 @@ private fun AssistantCaptureSheet(
             ) {
                 CaptureScreen(
                     viewModel = viewModel,
-                    forceVoiceStart = true,
                     onClose = onDismiss,
                     compact = true,
                     isAssistantMode = isAssistantMode,

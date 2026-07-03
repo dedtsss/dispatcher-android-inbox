@@ -47,7 +47,6 @@ import ru.bruce.dispatcherinbox.ui.theme.DispatcherBackground
 import ru.bruce.dispatcherinbox.ui.theme.DispatcherInboxTheme
 
 open class MainActivity : ComponentActivity() {
-    protected open val forceVoiceStart: Boolean = false
     protected open val captureSource: String = InboxSource.MANUAL
 
     private val roleRequest = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
@@ -73,7 +72,6 @@ open class MainActivity : ComponentActivity() {
                 InboxApp(
                     application = application,
                     container = container,
-                    forceVoiceStart = forceVoiceStart,
                     captureSource = captureSource,
                     startDestination = startDestination,
                     onClose = ::finish,
@@ -174,7 +172,6 @@ private data class Destination(
 private fun InboxApp(
     application: Application,
     container: AppContainer,
-    forceVoiceStart: Boolean,
     captureSource: String,
     startDestination: String,
     onClose: () -> Unit,
@@ -227,11 +224,11 @@ private fun InboxApp(
                         container.inboxRepository,
                         container.settingsRepository,
                         captureSource,
+                        container.applicationScope,
                     ),
                 )
                 CaptureScreen(
                     viewModel = captureViewModel,
-                    forceVoiceStart = forceVoiceStart,
                     onClose = onClose,
                     isAssistantMode = false,
                     panelAlpha = 1f,
