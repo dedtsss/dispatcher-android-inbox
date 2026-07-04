@@ -11,30 +11,47 @@ import org.junit.Test
 @OptIn(ExperimentalCoroutinesApi::class)
 class RecordingSafetyTimerTest {
     @Test
-    fun `fires once after recording limit`() = runTest {
+    fun `active overlay does not start timeout`() = runTest {
         var fired = false
-        val timer = RecordingSafetyTimer(this, timeoutMillis = 30_000L) { fired = true }
+        val timer = RecordingSafetyTimer(this, timeoutMillis = 60_000L) { fired = true }
 
-        timer.start()
-        advanceTimeBy(29_999L)
+        timer.recordingStarted()
+        advanceTimeBy(120_000L)
         runCurrent()
         assertFalse(fired)
+    }
 
+    @Test
+    fun `inactive overlay starts 60 second timeout`() = runTest {
+        var fired = false
+        val timer = RecordingSafetyTimer(this, timeoutMillis = 60_000L) { fired = true }
+
+        timer.recordingStarted()
+        timer.setOverlayActive(false)
+        advanceTimeBy(59_999L)
+        runCurrent()
+        assertFalse(fired)
         advanceTimeBy(1L)
         runCurrent()
         assertTrue(fired)
     }
 
     @Test
-    fun `manual cancellation prevents timeout`() = runTest {
+    fun `returning overlay cancels and resets timeout`() = runTest {
         var fired = false
-        val timer = RecordingSafetyTimer(this, timeoutMillis = 30_000L) { fired = true }
+        val timer = RecordingSafetyTimer(this, timeoutMillis = 60_000L) { fired = true }
 
-        timer.start()
-        timer.cancel()
+        timer.recordingStarted()
+        timer.setOverlayActive(false)
         advanceTimeBy(30_000L)
+        timer.setOverlayActive(true)
+        advanceTimeBy(60_000L)
         runCurrent()
-
         assertFalse(fired)
+
+        timer.setOverlayActive(false)
+        advanceTimeBy(60_000L)
+        runCurrent()
+        assertTrue(fired)
     }
 }

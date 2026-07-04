@@ -2,6 +2,7 @@ package ru.bruce.dispatcherinbox.ui.capture
 
 import android.app.Application
 import android.net.Uri
+import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
@@ -25,8 +26,10 @@ import ru.bruce.dispatcherinbox.data.InboxSource
 import ru.bruce.dispatcherinbox.data.InboxStatus
 import ru.bruce.dispatcherinbox.data.InboxItemWithAttachments
 import ru.bruce.dispatcherinbox.data.SettingsRepository
+import ru.bruce.dispatcherinbox.recording.RecordingForegroundService
 import ru.bruce.dispatcherinbox.util.AudioFeedbackManager
 import ru.bruce.dispatcherinbox.util.RecordingSafetyTimer
+import ru.bruce.dispatcherinbox.util.RecordingStopReason
 import ru.bruce.dispatcherinbox.util.VoiceRecorder
 
 data class CaptureUiState(
@@ -59,7 +62,7 @@ class CaptureViewModel(
     private val recordingSafetyTimer = RecordingSafetyTimer(
         scope = applicationScope,
         timeoutMillis = RECORDING_TIMEOUT_MILLIS,
-        onTimeout = { stopRecordingAndSave(autoStopped = true) },
+        onTimeout = { finishRecording(RecordingStopReason.TIMEOUT) },
     )
 
     val close = closeEvents.receiveAsFlow()
@@ -146,7 +149,10 @@ class CaptureViewModel(
         if (localState.value.isRecording || localState.value.isBusy) return
         lastSavedId = null
         runCatching {
-            recorder.start(repository.newVoiceFile())
+            RecordingForegroundService.start(getApplication())
+            recorder.start(repository.newVoiceFile()) { message ->
+                applicationScope.launch { handleRecorderError(message) }
+            }
             audioFeedback.playStartSound()
             localState.value = localState.value.copy(
                 isRecording = true,
@@ -154,46 +160,77 @@ class CaptureViewModel(
                 statusMessage = "Идет запись…",
                 isError = false,
             )
+            Log.i(TAG, "recording active; recorder actually active=${recorder.isActuallyActive()}")
             startAmplitudeUpdates()
-            recordingSafetyTimer.start()
+            recordingSafetyTimer.recordingStarted()
         }.onFailure {
+            RecordingForegroundService.stop(getApplication())
             audioFeedback.playErrorSound()
             showError("Не удалось начать запись")
         }
     }
 
     fun stopRecordingAndSave() {
-        stopRecordingAndSave(autoStopped = false)
+        finishRecording(RecordingStopReason.SEND)
     }
 
-    private fun stopRecordingAndSave(autoStopped: Boolean) {
+    fun cancelRecording() {
+        finishRecording(RecordingStopReason.CANCEL)
+    }
+
+    fun onHostActiveChanged(active: Boolean) {
+        Log.i(TAG, "overlay ${if (active) "active" else "inactive"}")
+        recordingSafetyTimer.setOverlayActive(active)
+    }
+
+    private fun finishRecording(reason: RecordingStopReason) {
         if (!localState.value.isRecording) return
-        if (!autoStopped) recordingSafetyTimer.cancel()
+        recordingSafetyTimer.recordingStopped()
         stopAmplitudeUpdates()
+        if (!reason.shouldSave) {
+            recorder.cancel()
+            RecordingForegroundService.stop(getApplication())
+            Log.i(TAG, "recording stopped without save: $reason")
+            localState.value = localState.value.copy(
+                isRecording = false,
+                recordingAmplitude = 0f,
+                isBusy = false,
+                statusMessage = if (reason == RecordingStopReason.CANCEL) "Запись отменена" else "Ошибка записи",
+                isError = reason == RecordingStopReason.ERROR,
+            )
+            return
+        }
         val text = localState.value.text
         val drafts = localState.value.attachments
         localState.value = localState.value.copy(
             isRecording = false,
             recordingAmplitude = 0f,
             isBusy = true,
-            statusMessage = if (autoStopped) "Запись остановлена автоматически" else "Сохраняем…",
+            statusMessage = if (reason == RecordingStopReason.TIMEOUT) {
+                "Запись остановлена автоматически"
+            } else {
+                "Сохраняем…"
+            },
         )
         applicationScope.launch {
             try {
-                val file = withContext(Dispatchers.IO) { recorder.stop() }
+                val recorded = withContext(Dispatchers.IO) { recorder.stop() }
+                RecordingForegroundService.stop(getApplication())
                 audioFeedback.playStopSound()
-                val voice = repository.voiceDraft(file)
+                val voice = repository.voiceDraft(recorded.file)
                 saveInternal(
                     text = text,
                     drafts = drafts + voice,
-                    successMessage = if (autoStopped) {
+                    durationMillis = recorded.durationMillis,
+                    successMessage = if (reason == RecordingStopReason.TIMEOUT) {
                         "Запись остановлена автоматически"
                     } else {
                         "В очереди"
                     },
-                    trackSavedItem = !autoStopped,
+                    trackSavedItem = reason != RecordingStopReason.TIMEOUT,
                 )
             } catch (error: Exception) {
+                RecordingForegroundService.stop(getApplication())
                 audioFeedback.playErrorSound()
                 showError(error.message ?: "Не удалось сохранить запись")
             }
@@ -215,6 +252,7 @@ class CaptureViewModel(
     private suspend fun saveInternal(
         text: String,
         drafts: List<AttachmentDraft>,
+        durationMillis: Long? = null,
         successMessage: String = "В очереди",
         trackSavedItem: Boolean = true,
     ) {
@@ -226,7 +264,7 @@ class CaptureViewModel(
             isBusy = true,
             statusMessage = if (successMessage == "В очереди") "Сохраняем…" else successMessage,
         )
-        runCatching { repository.save(text, drafts, source) }
+        runCatching { repository.save(text, drafts, source, durationMillis) }
             .onSuccess { item ->
                 lastSavedId = item.id.takeIf { trackSavedItem }
                 localState.value = CaptureUiState(
@@ -242,6 +280,7 @@ class CaptureViewModel(
     private fun showError(message: String) {
         recordingSafetyTimer.cancel()
         stopAmplitudeUpdates()
+        RecordingForegroundService.stop(getApplication())
         localState.value = localState.value.copy(
             isBusy = false,
             isRecording = false,
@@ -249,6 +288,13 @@ class CaptureViewModel(
             statusMessage = message,
             isError = true,
         )
+    }
+
+    private fun handleRecorderError(message: String) {
+        if (!localState.value.isRecording) return
+        Log.e(TAG, "microphone lost/error: $message")
+        finishRecording(RecordingStopReason.ERROR)
+        showError(message)
     }
 
     private fun startAmplitudeUpdates() {
@@ -295,6 +341,7 @@ class CaptureViewModel(
     }
 
     companion object {
-        const val RECORDING_TIMEOUT_MILLIS = 30_000L
+        const val RECORDING_TIMEOUT_MILLIS = 60_000L
+        private const val TAG = "BruceRecording"
     }
 }

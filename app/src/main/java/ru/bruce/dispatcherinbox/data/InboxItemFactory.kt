@@ -16,6 +16,7 @@ class InboxItemFactory(
         attachments: List<AttachmentDraft>,
         source: String,
         status: String = InboxStatus.QUEUED,
+        durationMillis: Long? = null,
     ): InboxItemEntity {
         val normalizedText = text?.trim()?.takeIf { it.isNotEmpty() }
         require(normalizedText != null || attachments.isNotEmpty()) {
@@ -33,6 +34,7 @@ class InboxItemFactory(
             retryCount = 0,
             lastError = null,
             remoteId = null,
+            durationMillis = durationMillis?.coerceAtLeast(0L),
         )
     }
 
@@ -41,8 +43,9 @@ class InboxItemFactory(
         attachments: List<AttachmentDraft>,
         source: String,
         status: String = InboxStatus.QUEUED,
+        durationMillis: Long? = null,
     ): InboxDraftPlan = InboxDraftPlan(
-        item = create(text, attachments, source, status),
+        item = create(text, attachments, source, status, durationMillis),
         attachments = attachments.toList(),
     )
 

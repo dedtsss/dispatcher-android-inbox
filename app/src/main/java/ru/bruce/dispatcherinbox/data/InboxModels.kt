@@ -44,6 +44,7 @@ data class InboxItemEntity(
     val retryCount: Int,
     val lastError: String?,
     val remoteId: String?,
+    val durationMillis: Long? = null,
 )
 
 @Entity(

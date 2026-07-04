@@ -27,6 +27,8 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Modifier
 import androidx.compose.foundation.layout.padding
 import androidx.core.content.ContextCompat
@@ -48,6 +50,7 @@ import ru.bruce.dispatcherinbox.ui.theme.DispatcherInboxTheme
 
 open class MainActivity : ComponentActivity() {
     protected open val captureSource: String = InboxSource.MANUAL
+    private val requestedDestination = mutableStateOf(AppDestination.CAPTURE.route)
 
     private val roleRequest = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
         val message = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
@@ -64,16 +67,21 @@ open class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         val container = (application as DispatcherApplication).container
-        val startDestination = intent.getStringExtra(EXTRA_START_DESTINATION)
-            ?.takeIf { it == "capture" || it == "queue" || it == "settings" }
-            ?: "capture"
+        if (AppEntryPolicy.isAssistantAction(intent.action)) {
+            openAssistantCapture(intent)
+            finish()
+            return
+        }
+        requestedDestination.value = AppEntryPolicy.destination(
+            intent.getStringExtra(EXTRA_START_DESTINATION),
+        ).route
         setContent {
             DispatcherInboxTheme {
                 InboxApp(
                     application = application,
                     container = container,
                     captureSource = captureSource,
-                    startDestination = startDestination,
+                    requestedDestination = requestedDestination.value,
                     onClose = ::finish,
                     onRequestAssistantRole = ::requestAssistantRole,
                     onOpenAssistantSettings = ::openAssistantSettings,
@@ -82,6 +90,27 @@ open class MainActivity : ComponentActivity() {
                 )
             }
         }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        if (AppEntryPolicy.isAssistantAction(intent.action)) {
+            openAssistantCapture(intent)
+        } else {
+            requestedDestination.value = AppEntryPolicy.destination(
+                intent.getStringExtra(EXTRA_START_DESTINATION),
+            ).route
+        }
+    }
+
+    private fun openAssistantCapture(sourceIntent: Intent) {
+        startActivity(
+            Intent(this, ru.bruce.dispatcherinbox.assistant.AssistantEntryActivity::class.java).apply {
+                action = sourceIntent.action ?: Intent.ACTION_ASSIST
+                addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+            },
+        )
     }
 
     private fun requestAssistantRole() {
@@ -173,7 +202,7 @@ private fun InboxApp(
     application: Application,
     container: AppContainer,
     captureSource: String,
-    startDestination: String,
+    requestedDestination: String,
     onClose: () -> Unit,
     onRequestAssistantRole: () -> Unit,
     onOpenAssistantSettings: () -> Unit,
@@ -182,27 +211,37 @@ private fun InboxApp(
 ) {
     val navController = rememberNavController()
     val destinations = listOf(
-        Destination("capture", "Записать", Icons.Default.EditNote),
+        Destination("capture", "Запись", Icons.Default.EditNote),
         Destination("queue", "Очередь", Icons.Default.Inbox),
         Destination("settings", "Настройки", Icons.Default.Settings),
     )
     val currentEntry by navController.currentBackStackEntryAsState()
     val currentRoute = currentEntry?.destination?.route
+    fun navigateRoot(route: String) {
+        navController.navigate(route) {
+            popUpTo(AppDestination.CAPTURE.route) {
+                inclusive = false
+                saveState = false
+            }
+            launchSingleTop = true
+            restoreState = false
+        }
+    }
+
+    LaunchedEffect(requestedDestination) {
+        navigateRoot(AppEntryPolicy.destination(requestedDestination).route)
+    }
 
     Scaffold(
         containerColor = DispatcherBackground,
         bottomBar = {
-            if (currentRoute != null && currentRoute != "capture") {
+            if (currentRoute != null) {
                 NavigationBar(containerColor = androidx.compose.material3.MaterialTheme.colorScheme.surface) {
                     destinations.forEach { destination ->
                         NavigationBarItem(
                             selected = currentRoute == destination.route,
                             onClick = {
-                                navController.navigate(destination.route) {
-                                    popUpTo("capture") { saveState = true }
-                                    launchSingleTop = true
-                                    restoreState = true
-                                }
+                                navigateRoot(destination.route)
                             },
                             icon = { Icon(destination.icon, contentDescription = null) },
                             label = { Text(destination.label) },
@@ -214,7 +253,7 @@ private fun InboxApp(
     ) { padding ->
         NavHost(
             navController = navController,
-            startDestination = startDestination,
+            startDestination = AppDestination.CAPTURE.route,
             modifier = Modifier.padding(padding),
         ) {
             composable("capture") {
@@ -232,8 +271,8 @@ private fun InboxApp(
                     onClose = onClose,
                     isAssistantMode = false,
                     panelAlpha = 1f,
-                    onOpenSettings = { navController.navigate("settings") },
-                    onOpenQueue = { navController.navigate("queue") },
+                    onOpenSettings = { navigateRoot(AppDestination.SETTINGS.route) },
+                    onOpenQueue = { navigateRoot(AppDestination.QUEUE.route) },
                 )
             }
             composable("queue") {

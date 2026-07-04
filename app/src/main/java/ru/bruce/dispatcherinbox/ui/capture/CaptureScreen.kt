@@ -65,6 +65,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -91,11 +92,16 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import ru.bruce.dispatcherinbox.BuildConfig
 import ru.bruce.dispatcherinbox.data.AttachmentDraft
 import ru.bruce.dispatcherinbox.data.DefaultOpenMode
 import ru.bruce.dispatcherinbox.data.InboxItemWithAttachments
 import ru.bruce.dispatcherinbox.data.InboxStatus
+import ru.bruce.dispatcherinbox.data.JournalKind
+import ru.bruce.dispatcherinbox.data.toJournalPresentation
 import ru.bruce.dispatcherinbox.ui.theme.DispatcherBackground
 import ru.bruce.dispatcherinbox.ui.theme.DispatcherError
 import ru.bruce.dispatcherinbox.ui.theme.DispatcherSuccess
@@ -123,9 +129,26 @@ fun CaptureScreen(
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
     var requestedAutoStart by rememberSaveable { mutableStateOf(false) }
     var showAbout by rememberSaveable { mutableStateOf(false) }
     val noteFocusRequester = remember { FocusRequester() }
+
+    DisposableEffect(lifecycleOwner, viewModel) {
+        val observer = LifecycleEventObserver { _, event ->
+            when (event) {
+                Lifecycle.Event.ON_RESUME -> viewModel.onHostActiveChanged(true)
+                Lifecycle.Event.ON_PAUSE -> viewModel.onHostActiveChanged(false)
+                else -> Unit
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        viewModel.onHostActiveChanged(lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED))
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+            viewModel.onHostActiveChanged(false)
+        }
+    }
 
     val audioPermission = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission(),
@@ -234,7 +257,7 @@ fun CaptureScreen(
                     voiceModeSelected = state.defaultOpenMode == DefaultOpenMode.VOICE,
                     isBusy = state.isBusy,
                     onVoiceClick = {
-                        if (state.isRecording) viewModel.stopRecordingAndSave() else startWithPermission()
+                        if (state.isRecording) viewModel.cancelRecording() else startWithPermission()
                     },
                     onFileClick = { filePicker.launch("*/*") },
                     onPhotoClick = {
@@ -256,9 +279,11 @@ fun CaptureScreen(
                     isRecording = state.isRecording,
                     isSending = state.isBusy,
                     audioLevel = state.recordingAmplitude,
-                    enabled = !state.isBusy && !state.isRecording &&
-                        (state.text.isNotBlank() || state.attachments.isNotEmpty()),
-                    onClick = viewModel::save,
+                    enabled = !state.isBusy && (state.isRecording ||
+                        state.text.isNotBlank() || state.attachments.isNotEmpty()),
+                    onClick = {
+                        if (state.isRecording) viewModel.stopRecordingAndSave() else viewModel.save()
+                    },
                 )
 
                 RecentJournal(
@@ -375,8 +400,8 @@ private fun ActionButtons(
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         CaptureActionButton(
-            text = if (isRecording) "Стоп" else "Голос",
-            icon = if (isRecording) Icons.Default.Stop else Icons.Default.Mic,
+            text = if (isRecording) "Отмена" else "Голос",
+            icon = if (isRecording) Icons.Default.Cancel else Icons.Default.Mic,
             enabled = !isBusy,
             active = isRecording || voiceModeSelected,
             onClick = onVoiceClick,
@@ -488,7 +513,7 @@ fun DynamicSendButton(
                 Text(
                     text = when {
                         isSending -> "Сохраняем…"
-                        isRecording -> "Идёт запись"
+                        isRecording -> "Отправить"
                         else -> "Отправить"
                     },
                     modifier = Modifier.padding(horizontal = 18.dp, vertical = 7.dp),
@@ -655,11 +680,13 @@ private fun RecentJournalRow(entry: InboxItemWithAttachments) {
             .padding(vertical = 9.dp, horizontal = 2.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        JournalTypeIcons(entry.toJournalPresentation().kinds)
+        Spacer(Modifier.width(5.dp))
         Icon(
             imageVector = status.icon,
             contentDescription = status.description,
             tint = status.color,
-            modifier = Modifier.size(21.dp),
+            modifier = Modifier.size(14.dp),
         )
         Text(
             text = recentSummary(entry),
@@ -687,7 +714,28 @@ private fun journalStatus(status: String): JournalStatus = when (status) {
     InboxStatus.SYNCED -> JournalStatus(Icons.Default.CheckCircle, DispatcherSuccess, "Отправлено")
     InboxStatus.ERROR -> JournalStatus(Icons.Default.Cancel, DispatcherError, "Ошибка")
     InboxStatus.SYNCING -> JournalStatus(Icons.Default.HourglassTop, DispatcherWarning, "Отправляется")
+    InboxStatus.DRAFT -> JournalStatus(Icons.Default.HourglassTop, Color.Gray, "Черновик")
     else -> JournalStatus(Icons.Default.HourglassTop, DispatcherWarning, "В очереди")
+}
+
+@Composable
+private fun JournalTypeIcons(kinds: List<JournalKind>) {
+    Row(horizontalArrangement = Arrangement.spacedBy((-3).dp)) {
+        kinds.take(3).forEach { kind ->
+            Icon(
+                imageVector = when (kind) {
+                    JournalKind.TEXT -> Icons.Default.Description
+                    JournalKind.PHOTO -> Icons.Default.Image
+                    JournalKind.FILE -> Icons.Default.AttachFile
+                    JournalKind.VOICE -> Icons.Default.Mic
+                    JournalKind.VIDEO -> Icons.Default.Movie
+                },
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(19.dp),
+            )
+        }
+    }
 }
 
 @Composable
@@ -742,10 +790,14 @@ private fun attachmentTypeLabel(mimeType: String?): String {
 }
 
 private fun recentSummary(entry: InboxItemWithAttachments): String {
-    entry.item.text?.takeIf { it.isNotBlank() }?.let { return it }
-    val first = entry.attachments.firstOrNull()?.originalName ?: "Запись без названия"
-    val remaining = entry.attachments.size - 1
-    return if (remaining > 0) "$first и ещё $remaining" else first
+    val presentation = entry.toJournalPresentation()
+    val status = journalStatus(entry.item.status).description.lowercase()
+    return buildList {
+        add(presentation.typeSummary)
+        presentation.duration?.let(::add)
+        add(status)
+        presentation.detail?.let(::add)
+    }.joinToString(" · ")
 }
 
 private fun formatSize(bytes: Long): String = when {
