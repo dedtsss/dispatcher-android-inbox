@@ -40,7 +40,12 @@ class SyncScheduler(
     private fun enqueueImmediate(manual: Boolean, wifiOnly: Boolean) {
         val request = OneTimeWorkRequestBuilder<SyncWorker>()
             .setConstraints(networkConstraints(wifiOnly))
-            .setInputData(workDataOf(SyncWorker.KEY_MANUAL to manual))
+            .setInputData(
+                workDataOf(
+                    SyncWorker.KEY_MANUAL to manual,
+                    SyncWorker.KEY_WATCHDOG to false,
+                ),
+            )
             .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 1, TimeUnit.MINUTES)
             .build()
         WorkManager.getInstance(context).enqueueUniqueWork(
@@ -53,8 +58,12 @@ class SyncScheduler(
     private fun ensurePeriodic(wifiOnly: Boolean) {
         val request = PeriodicWorkRequestBuilder<SyncWorker>(15, TimeUnit.MINUTES)
             .setConstraints(networkConstraints(wifiOnly))
-            .setInputData(workDataOf(SyncWorker.KEY_MANUAL to false))
-            .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 1, TimeUnit.MINUTES)
+            .setInputData(
+                workDataOf(
+                    SyncWorker.KEY_MANUAL to false,
+                    SyncWorker.KEY_WATCHDOG to true,
+                ),
+            )
             .build()
         WorkManager.getInstance(context).enqueueUniquePeriodicWork(
             PERIODIC_WORK_NAME,
