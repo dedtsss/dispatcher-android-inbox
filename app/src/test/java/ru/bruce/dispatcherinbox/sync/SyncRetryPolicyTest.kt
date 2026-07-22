@@ -23,8 +23,28 @@ class SyncRetryPolicyTest {
     }
 
     @Test
-    fun `retryable queue failure keeps worker scheduled`() {
-        assertTrue(SyncRetryPolicy.shouldRetryWorker(true))
-        assertFalse(SyncRetryPolicy.shouldRetryWorker(false))
+    fun `immediate worker keeps retryable queue failure scheduled`() {
+        assertTrue(
+            SyncRetryPolicy.shouldRetryWorker(
+                hasRetryableFailure = true,
+                isPeriodicWatchdog = false,
+            ),
+        )
+        assertFalse(
+            SyncRetryPolicy.shouldRetryWorker(
+                hasRetryableFailure = false,
+                isPeriodicWatchdog = false,
+            ),
+        )
+    }
+
+    @Test
+    fun `watchdog completes so it runs again on its fixed interval`() {
+        assertFalse(
+            SyncRetryPolicy.shouldRetryWorker(
+                hasRetryableFailure = true,
+                isPeriodicWatchdog = true,
+            ),
+        )
     }
 }
