@@ -19,6 +19,7 @@ class SyncWorker(
         val container = (applicationContext as DispatcherApplication).container
         val settings = container.settingsRepository.settings.first()
         val manual = inputData.getBoolean(KEY_MANUAL, false)
+        val watchdog = inputData.getBoolean(KEY_WATCHDOG, false)
         if (!manual && !settings.autoSync) return@withLock Result.success()
 
         container.dao.recoverInterruptedSyncs("Предыдущая синхронизация была прервана")
@@ -58,11 +59,12 @@ class SyncWorker(
             }
         }
 
-        if (SyncRetryPolicy.shouldRetryWorker(shouldRetry)) Result.retry() else Result.success()
+        if (SyncRetryPolicy.shouldRetryWorker(shouldRetry, watchdog)) Result.retry() else Result.success()
     }
 
     companion object {
         const val KEY_MANUAL = "manual"
+        const val KEY_WATCHDOG = "watchdog"
         private val syncMutex = Mutex()
     }
 }
