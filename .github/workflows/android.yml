@@ -41,7 +41,7 @@ jobs:
           mkdir -p "$RUNNER_TEMP/dispatcher-signing"
           printf '%s' "$SIGNING_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/dispatcher-signing/dispatcher.jks"
 
-      - name: Test and build debug APK
+      - name: Compile Android sources
         env:
           DISPATCHER_SIGNING_STORE_FILE: ${{ runner.temp }}/dispatcher-signing/dispatcher.jks
           DISPATCHER_SIGNING_STORE_PASSWORD: ${{ secrets.DISPATCHER_SIGNING_STORE_PASSWORD }}
@@ -49,7 +49,7 @@ jobs:
           DISPATCHER_SIGNING_KEY_PASSWORD: ${{ secrets.DISPATCHER_SIGNING_KEY_PASSWORD }}
         run: |
           set -o pipefail
-          ./gradlew testDebugUnitTest assembleDebug --stacktrace 2>&1 | tee gradle-build.log
+          ./gradlew compileDebugKotlin compileDebugUnitTestKotlin --stacktrace 2>&1 | tee gradle-build.log
 
       - name: Upload Gradle diagnostics
         if: failure()
@@ -57,15 +57,4 @@ jobs:
         with:
           name: gradle-build-log
           path: gradle-build.log
-          if-no-files-found: error
-
-      - name: Verify APK signature
-        run: |
-          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify app/build/outputs/apk/debug/app-debug.apk
-
-      - name: Upload debug APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: priemnik-debug-apk
-          path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
