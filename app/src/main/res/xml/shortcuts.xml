@@ -9,6 +9,10 @@
         <intent
             android:action="android.intent.action.VIEW"
             android:targetPackage="ru.bruce.dispatcherinbox"
-            android:targetClass="ru.bruce.dispatcherinbox.MainActivity" />
+            android:targetClass="ru.bruce.dispatcherinbox.MainActivity">
+            <extra
+                android:name="ru.bruce.dispatcherinbox.START_DESTINATION"
+                android:value="capture" />
+        </intent>
     </shortcut>
 </shortcuts>

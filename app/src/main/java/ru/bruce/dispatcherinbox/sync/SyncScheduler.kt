@@ -3,9 +3,11 @@ package ru.bruce.dispatcherinbox.sync
 import android.content.Context
 import androidx.work.BackoffPolicy
 import androidx.work.Constraints
+import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.ExistingWorkPolicy
 import androidx.work.NetworkType
 import androidx.work.OneTimeWorkRequestBuilder
+import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.workDataOf
 import kotlinx.coroutines.flow.first
@@ -19,28 +21,63 @@ class SyncScheduler(
     suspend fun scheduleAutomatic() {
         val settings = settingsRepository.settings.first()
         if (!settings.autoSync) return
-        enqueue(manual = false, wifiOnly = settings.wifiOnly)
+        ensurePeriodic(wifiOnly = settings.wifiOnly)
+        enqueueImmediate(manual = false, wifiOnly = settings.wifiOnly)
     }
 
-    fun scheduleManual() = enqueue(manual = true, wifiOnly = false)
+    suspend fun ensurePeriodic() {
+        val settings = settingsRepository.settings.first()
+        val workManager = WorkManager.getInstance(context)
+        if (!settings.autoSync) {
+            workManager.cancelUniqueWork(PERIODIC_WORK_NAME)
+            return
+        }
+        ensurePeriodic(wifiOnly = settings.wifiOnly)
+    }
 
-    private fun enqueue(manual: Boolean, wifiOnly: Boolean) {
-        val constraints = Constraints.Builder()
-            .setRequiredNetworkType(if (wifiOnly) NetworkType.UNMETERED else NetworkType.CONNECTED)
-            .build()
+    fun scheduleManual() = enqueueImmediate(manual = true, wifiOnly = false)
+
+    private fun enqueueImmediate(manual: Boolean, wifiOnly: Boolean) {
         val request = OneTimeWorkRequestBuilder<SyncWorker>()
-            .setConstraints(constraints)
-            .setInputData(workDataOf(SyncWorker.KEY_MANUAL to manual))
-            .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 15, TimeUnit.SECONDS)
+            .setConstraints(networkConstraints(wifiOnly))
+            .setInputData(
+                workDataOf(
+                    SyncWorker.KEY_MANUAL to manual,
+                    SyncWorker.KEY_WATCHDOG to false,
+                ),
+            )
+            .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 1, TimeUnit.MINUTES)
             .build()
         WorkManager.getInstance(context).enqueueUniqueWork(
-            UNIQUE_WORK_NAME,
+            IMMEDIATE_WORK_NAME,
             ExistingWorkPolicy.REPLACE,
             request,
         )
     }
 
+    private fun ensurePeriodic(wifiOnly: Boolean) {
+        val request = PeriodicWorkRequestBuilder<SyncWorker>(15, TimeUnit.MINUTES)
+            .setConstraints(networkConstraints(wifiOnly))
+            .setInputData(
+                workDataOf(
+                    SyncWorker.KEY_MANUAL to false,
+                    SyncWorker.KEY_WATCHDOG to true,
+                ),
+            )
+            .build()
+        WorkManager.getInstance(context).enqueueUniquePeriodicWork(
+            PERIODIC_WORK_NAME,
+            ExistingPeriodicWorkPolicy.UPDATE,
+            request,
+        )
+    }
+
+    private fun networkConstraints(wifiOnly: Boolean) = Constraints.Builder()
+        .setRequiredNetworkType(if (wifiOnly) NetworkType.UNMETERED else NetworkType.CONNECTED)
+        .build()
+
     private companion object {
-        const val UNIQUE_WORK_NAME = "dispatcher-inbox-sync"
+        const val IMMEDIATE_WORK_NAME = "dispatcher-inbox-sync"
+        const val PERIODIC_WORK_NAME = "dispatcher-inbox-sync-watchdog"
     }
 }
