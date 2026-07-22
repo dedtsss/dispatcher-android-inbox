@@ -47,7 +47,17 @@ jobs:
           DISPATCHER_SIGNING_STORE_PASSWORD: ${{ secrets.DISPATCHER_SIGNING_STORE_PASSWORD }}
           DISPATCHER_SIGNING_KEY_ALIAS: ${{ secrets.DISPATCHER_SIGNING_KEY_ALIAS }}
           DISPATCHER_SIGNING_KEY_PASSWORD: ${{ secrets.DISPATCHER_SIGNING_KEY_PASSWORD }}
-        run: ./gradlew testDebugUnitTest assembleDebug --stacktrace
+        run: |
+          set -o pipefail
+          ./gradlew testDebugUnitTest assembleDebug --stacktrace 2>&1 | tee gradle-build.log
+
+      - name: Upload Gradle diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gradle-build-log
+          path: gradle-build.log
+          if-no-files-found: error
 
       - name: Verify APK signature
         run: |
