@@ -13,6 +13,7 @@ import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
 import ru.bruce.dispatcherinbox.data.AppSettings
 import ru.bruce.dispatcherinbox.data.InboxItemWithAttachments
+import ru.bruce.dispatcherinbox.sync.SyncRetryPolicy
 import java.io.File
 import java.io.IOException
 import java.util.concurrent.TimeUnit
@@ -78,7 +79,7 @@ class RetrofitDispatcherGateway(
             } else {
                 UploadResult.Failure(
                     message = "Сервер вернул HTTP ${response.code()}",
-                    retryable = response.code() == 408 || response.code() == 429 || response.code() >= 500,
+                    retryable = SyncRetryPolicy.isRetryableHttp(response.code()),
                 )
             }
         } catch (error: IOException) {
