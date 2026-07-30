@@ -5,64 +5,53 @@ import android.net.Uri
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.dp
+import androidx.activity.enableEdgeToEdge
 import androidx.core.content.IntentCompat
-import androidx.lifecycle.lifecycleScope
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
+import androidx.lifecycle.viewmodel.compose.viewModel
 import ru.bruce.dispatcherinbox.DispatcherApplication
-import ru.bruce.dispatcherinbox.data.AttachmentDraft
 import ru.bruce.dispatcherinbox.data.InboxSource
+import ru.bruce.dispatcherinbox.ui.capture.CatChingCaptureSheet
+import ru.bruce.dispatcherinbox.ui.capture.CaptureViewModel
 import ru.bruce.dispatcherinbox.ui.theme.DispatcherInboxTheme
 
+/**
+ * Confirmation UI for Android Sharesheet and selected-text actions. Nothing is saved until the
+ * person explicitly chooses the primary action in the CatChing sheet.
+ */
 class ShareReceiverActivity : ComponentActivity() {
-    private var message by mutableStateOf("Сохраняем в Диспетчер Bruce…")
-    private var running by mutableStateOf(true)
-
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        enableEdgeToEdge()
+        val container = (application as DispatcherApplication).container
+        val initialText = textFrom(intent)
+        val initialUris = extractUris(intent)
+
         setContent {
             DispatcherInboxTheme {
-                Column(
-                    modifier = Modifier.fillMaxSize().padding(28.dp),
-                    verticalArrangement = Arrangement.Center,
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                ) {
-                    if (running) CircularProgressIndicator(modifier = Modifier.padding(bottom = 20.dp))
-                    Text(message, style = MaterialTheme.typography.titleMedium)
-                }
+                CatChingCaptureSheet(
+                    viewModel = viewModel(
+                        factory = CaptureViewModel.Factory(
+                            application = application,
+                            repository = container.inboxRepository,
+                            settingsRepository = container.settingsRepository,
+                            source = InboxSource.SHARE,
+                            initialText = initialText,
+                            initialUris = initialUris,
+                            closeOnSuccessfulSave = true,
+                        ),
+                    ),
+                    allowAutoStartVoice = false,
+                    onDismiss = ::finish,
+                    onSaved = ::finish,
+                )
             }
         }
-        lifecycleScope.launch { receiveShare(intent) }
     }
 
-    private suspend fun receiveShare(intent: Intent) {
-        val repository = (application as DispatcherApplication).container.inboxRepository
-        val text = intent.getCharSequenceExtra(Intent.EXTRA_TEXT)?.toString()
-        val drafts = mutableListOf<AttachmentDraft>()
-        try {
-            extractUris(intent).forEach { drafts += repository.stage(it) }
-            repository.save(text, drafts, InboxSource.SHARE)
-            message = "Сохранено в очередь"
-        } catch (error: Exception) {
-            drafts.forEach { runCatching { repository.discardDraft(it) } }
-            message = error.message ?: "Не удалось сохранить"
-        }
-        running = false
-        delay(1_200)
-        finish()
+    private fun textFrom(intent: Intent): String? = when (intent.action) {
+        Intent.ACTION_PROCESS_TEXT ->
+            intent.getCharSequenceExtra(Intent.EXTRA_PROCESS_TEXT)?.toString()
+        else -> intent.getCharSequenceExtra(Intent.EXTRA_TEXT)?.toString()
     }
 
     private fun extractUris(intent: Intent): List<Uri> {

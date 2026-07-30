@@ -1,39 +1,27 @@
 package ru.bruce.dispatcherinbox.ui.theme
 
-import android.os.Build
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
-import androidx.compose.material3.dynamicDarkColorScheme
-import androidx.compose.material3.dynamicLightColorScheme
-import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
-
-private val LightColors = lightColorScheme(
-    primary = Color(0xFF4058A8),
-    onPrimary = Color.White,
-    primaryContainer = Color(0xFFDCE1FF),
-    surface = Color(0xFFF9F9FC),
-    surfaceVariant = Color(0xFFE3E3E9),
-)
 
 private val DarkColors = darkColorScheme(
-    primary = Color(0xFFB7C4FF),
-    primaryContainer = Color(0xFF293F8B),
-    surface = Color(0xFF121318),
+    primary = Color(0xFF8ED7FF),
+    onPrimary = Color(0xFF06243A),
+    primaryContainer = Color(0xFF174667),
+    secondary = Color(0xFFD0BBFF),
+    secondaryContainer = Color(0xFF40346F),
+    tertiary = Color(0xFFC6B8FF),
+    tertiaryContainer = Color(0xFF4B3D83),
+    surface = Color(0xFF0B0D14),
+    surfaceVariant = Color(0xFF191C27),
+    surfaceContainerHigh = Color(0xFF1B1E29),
+    onSurface = Color(0xFFE4E5EC),
+    onSurfaceVariant = Color(0xFFC4C6D0),
+    outlineVariant = Color(0xFF444853),
 )
 
 @Composable
 fun DispatcherInboxTheme(content: @Composable () -> Unit) {
-    val context = LocalContext.current
-    val dark = isSystemInDarkTheme()
-    val colors = when {
-        Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && dark -> dynamicDarkColorScheme(context)
-        Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> dynamicLightColorScheme(context)
-        dark -> DarkColors
-        else -> LightColors
-    }
-    MaterialTheme(colorScheme = colors, content = content)
+    MaterialTheme(colorScheme = DarkColors, content = content)
 }
