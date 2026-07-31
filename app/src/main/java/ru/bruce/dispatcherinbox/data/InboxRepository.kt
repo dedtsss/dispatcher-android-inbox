@@ -22,8 +22,9 @@ class InboxRepository(
         text: String?,
         drafts: List<AttachmentDraft>,
         source: String = InboxSource.MANUAL,
+        durationMillis: Long? = null,
     ): InboxItemEntity {
-        val item = factory.create(text, drafts, source)
+        val item = factory.create(text, drafts, source, durationMillis = durationMillis)
         val attachments = mutableListOf<InboxAttachmentEntity>()
         try {
             drafts.forEach { attachments += attachmentStore.commit(item.id, it) }

@@ -50,4 +50,17 @@ class InboxItemFactoryTest {
 
         assertEquals(InboxType.VOICE, factory.create(null, listOf(voice), InboxSource.ASSISTANT).type)
     }
+
+    @Test
+    fun `keeps selection text source and optional duration`() {
+        val item = factory.create(
+            text = "Выделенный фрагмент",
+            attachments = emptyList(),
+            source = InboxSource.SELECTION_TEXT,
+            durationMillis = -1L,
+        )
+
+        assertEquals(InboxSource.SELECTION_TEXT, item.source)
+        assertEquals(0L, item.durationMillis)
+    }
 }

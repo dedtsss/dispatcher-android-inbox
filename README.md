@@ -10,6 +10,7 @@ CatChing I (кратко — CatChing) улавливает входящую и�
 - запись AAC/M4A через `MediaRecorder` с тихими системными сигналами и индикатором уровня звука;
 - множественный выбор фото и файлов через системный picker с копированием во внутреннее app-specific storage;
 - прием `ACTION_SEND`, `ACTION_SEND_MULTIPLE` и `ACTION_PROCESS_TEXT`; общий bottom sheet открывает данные для подтверждения, а не сохраняет их без участия пользователя;
+- разделены источники входа: `selection_text` для выделенного текста и `share` для обычного Android Sharesheet;
 - Room-очередь со статусами `draft`, `queued`, `syncing`, `synced`, `error`;
 - WorkManager-синхронизация с ограничением по сети или Wi-Fi и backoff;
 - multipart API: JSON-part `payload` и один или несколько `files[]`;

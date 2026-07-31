@@ -73,7 +73,7 @@ private fun QueueCard(
             val summary = item.text ?: entry.attachments.joinToString { it.originalName ?: "Вложение" }
             Text(summary, maxLines = 2, overflow = TextOverflow.Ellipsis)
             Text(
-                formatTime(item.createdAt),
+                "${formatTime(item.createdAt)} · ${sourceLabel(item.source)}",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -130,6 +130,14 @@ private fun typeLabel(type: String) = when (type) {
     "document" -> "Документ"
     "mixed" -> "Текст и файлы"
     else -> "Файл"
+}
+
+private fun sourceLabel(source: String) = when (source) {
+    "manual" -> "Ручной ввод"
+    "assistant" -> "Ассистент"
+    "share" -> "Поделиться"
+    "selection_text" -> "Выделенный текст"
+    else -> source
 }
 
 private fun formatTime(timestamp: Long): String = DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm")

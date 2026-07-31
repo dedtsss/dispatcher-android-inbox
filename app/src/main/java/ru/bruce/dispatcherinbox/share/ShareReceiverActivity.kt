@@ -25,6 +25,11 @@ class ShareReceiverActivity : ComponentActivity() {
         val container = (application as DispatcherApplication).container
         val initialText = textFrom(intent)
         val initialUris = extractUris(intent)
+        val source = if (intent.action == Intent.ACTION_PROCESS_TEXT) {
+            InboxSource.SELECTION_TEXT
+        } else {
+            InboxSource.SHARE
+        }
 
         setContent {
             DispatcherInboxTheme {
@@ -34,7 +39,7 @@ class ShareReceiverActivity : ComponentActivity() {
                             application = application,
                             repository = container.inboxRepository,
                             settingsRepository = container.settingsRepository,
-                            source = InboxSource.SHARE,
+                            source = source,
                             initialText = initialText,
                             initialUris = initialUris,
                             closeOnSuccessfulSave = true,

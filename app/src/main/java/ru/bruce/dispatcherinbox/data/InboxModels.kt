@@ -30,6 +30,7 @@ object InboxSource {
     const val MANUAL = "manual"
     const val ASSISTANT = "assistant"
     const val SHARE = "share"
+    const val SELECTION_TEXT = "selection_text"
 }
 
 @Entity(tableName = "inbox_items")
@@ -44,6 +45,7 @@ data class InboxItemEntity(
     val retryCount: Int,
     val lastError: String?,
     val remoteId: String?,
+    val durationMillis: Long? = null,
 )
 
 @Entity(
