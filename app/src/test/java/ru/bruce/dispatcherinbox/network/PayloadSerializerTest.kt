@@ -18,7 +18,7 @@ class PayloadSerializerTest {
             createdAt = 0L,
             updatedAt = 0L,
             status = InboxStatus.QUEUED,
-            source = InboxSource.MANUAL,
+            source = InboxSource.SELECTION_TEXT,
             retryCount = 0,
             lastError = null,
             remoteId = null,
@@ -29,6 +29,7 @@ class PayloadSerializerTest {
 
         assertEquals("client-42", json["clientItemId"].asString)
         assertEquals("text", json["type"].asString)
+        assertEquals("selection_text", json["source"].asString)
         assertEquals("1970-01-01T00:00:00Z", json["createdAt"].asString)
         assertEquals("android", json["metadata"].asJsonObject["platform"].asString)
         assertEquals("0.1-test", json["metadata"].asJsonObject["appVersion"].asString)

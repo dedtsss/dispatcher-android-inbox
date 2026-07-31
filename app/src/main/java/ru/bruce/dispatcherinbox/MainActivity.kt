@@ -27,6 +27,9 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.foundation.layout.padding
 import androidx.core.content.ContextCompat
@@ -37,6 +40,7 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import ru.bruce.dispatcherinbox.data.InboxSource
 import ru.bruce.dispatcherinbox.quick.QuickCaptureTileService
+import ru.bruce.dispatcherinbox.ui.capture.CatChingCaptureSheet
 import ru.bruce.dispatcherinbox.ui.capture.CaptureScreen
 import ru.bruce.dispatcherinbox.ui.capture.CaptureViewModel
 import ru.bruce.dispatcherinbox.ui.queue.QueueScreen
@@ -46,13 +50,12 @@ import ru.bruce.dispatcherinbox.ui.settings.SettingsViewModel
 import ru.bruce.dispatcherinbox.ui.theme.DispatcherInboxTheme
 
 open class MainActivity : ComponentActivity() {
-    protected open val forceVoiceStart: Boolean = false
     protected open val captureSource: String = InboxSource.MANUAL
 
     private val roleRequest = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
         val message = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             val roles = getSystemService(RoleManager::class.java)
-            if (roles.isRoleHeld(RoleManager.ROLE_ASSISTANT)) "Диспетчер Bruce выбран ассистентом"
+            if (roles.isRoleHeld(RoleManager.ROLE_ASSISTANT)) "CatChing выбран ассистентом"
             else "Роль ассистента не назначена"
         } else {
             "Проверьте выбор ассистента в настройках Android"
@@ -69,7 +72,6 @@ open class MainActivity : ComponentActivity() {
                 InboxApp(
                     application = application,
                     container = container,
-                    forceVoiceStart = forceVoiceStart,
                     captureSource = captureSource,
                     onClose = ::finish,
                     onRequestAssistantRole = ::requestAssistantRole,
@@ -87,7 +89,7 @@ open class MainActivity : ComponentActivity() {
             when {
                 !roleManager.isRoleAvailable(RoleManager.ROLE_ASSISTANT) -> openAssistantSettings()
                 roleManager.isRoleHeld(RoleManager.ROLE_ASSISTANT) ->
-                    Toast.makeText(this, "Диспетчер Bruce уже выбран ассистентом", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(this, "CatChing уже выбран ассистентом", Toast.LENGTH_SHORT).show()
                 else -> roleRequest.launch(roleManager.createRequestRoleIntent(RoleManager.ROLE_ASSISTANT))
             }
         } else {
@@ -115,7 +117,7 @@ open class MainActivity : ComponentActivity() {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
             Toast.makeText(
                 this,
-                "Откройте шторку, нажмите «Изменить» и добавьте плитку «Диспетчер Bruce»",
+                "Откройте шторку, нажмите «Изменить» и добавьте плитку «CatChing»",
                 Toast.LENGTH_LONG,
             ).show()
             return
@@ -125,7 +127,7 @@ open class MainActivity : ComponentActivity() {
         statusBarManager.requestAddTileService(
             ComponentName(this, QuickCaptureTileService::class.java),
             getString(R.string.quick_settings_tile_label),
-            Icon.createWithResource(this, R.drawable.ic_quick_capture_tile),
+            Icon.createWithResource(this, R.mipmap.ic_launcher),
             ContextCompat.getMainExecutor(this),
         ) { result ->
             val message = when (result) {
@@ -165,7 +167,6 @@ private data class Destination(
 private fun InboxApp(
     application: Application,
     container: AppContainer,
-    forceVoiceStart: Boolean,
     captureSource: String,
     onClose: () -> Unit,
     onRequestAssistantRole: () -> Unit,
@@ -174,6 +175,7 @@ private fun InboxApp(
     onRequestQuickSettingsTile: () -> Unit,
 ) {
     val navController = rememberNavController()
+    var captureSheetVisible by rememberSaveable { mutableStateOf(true) }
     val destinations = listOf(
         Destination("capture", "Записать", Icons.Default.EditNote),
         Destination("queue", "Очередь", Icons.Default.Inbox),
@@ -189,6 +191,7 @@ private fun InboxApp(
                     NavigationBarItem(
                         selected = currentRoute == destination.route,
                         onClick = {
+                            if (destination.route == "capture") captureSheetVisible = true
                             navController.navigate(destination.route) {
                                 popUpTo("capture") { saveState = true }
                                 launchSingleTop = true
@@ -214,9 +217,23 @@ private fun InboxApp(
                         container.inboxRepository,
                         container.settingsRepository,
                         captureSource,
+                        closeOnSuccessfulSave = true,
                     ),
                 )
-                CaptureScreen(captureViewModel, forceVoiceStart, onClose)
+                if (captureSheetVisible) {
+                    CatChingCaptureSheet(
+                        viewModel = captureViewModel,
+                        allowAutoStartVoice = true,
+                        onDismiss = { captureSheetVisible = false },
+                        onSaved = onClose,
+                    )
+                } else {
+                    CaptureScreen(
+                        viewModel = captureViewModel,
+                        allowAutoStartVoice = false,
+                        onClose = onClose,
+                    )
+                }
             }
             composable("queue") {
                 val queueViewModel: QueueViewModel = viewModel(

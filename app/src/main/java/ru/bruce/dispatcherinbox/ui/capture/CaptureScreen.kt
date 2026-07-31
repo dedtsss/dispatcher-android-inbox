@@ -39,6 +39,7 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -72,10 +73,11 @@ import java.util.Locale
 @Composable
 fun CaptureScreen(
     viewModel: CaptureViewModel,
-    forceVoiceStart: Boolean,
+    allowAutoStartVoice: Boolean,
     onClose: () -> Unit,
     modifier: Modifier = Modifier,
-    compact: Boolean = false,
+    inSheet: Boolean = false,
+    showRecent: Boolean = true,
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val context = LocalContext.current
@@ -105,9 +107,9 @@ fun CaptureScreen(
         }
     }
 
-    LaunchedEffect(state.defaultOpenMode, forceVoiceStart) {
-        if (!requestedAutoStart && state.defaultOpenMode != null &&
-            (forceVoiceStart || state.defaultOpenMode == "voice")
+    LaunchedEffect(state.defaultOpenMode, state.hasInitialContent, allowAutoStartVoice) {
+        if (!requestedAutoStart && allowAutoStartVoice && !state.hasInitialContent &&
+            state.defaultOpenMode == "voice"
         ) {
             requestedAutoStart = true
             startWithPermission()
@@ -119,28 +121,16 @@ fun CaptureScreen(
         modifier = modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
-            .padding(horizontal = if (compact) 18.dp else 20.dp, vertical = 14.dp),
+            .padding(horizontal = if (inSheet) 18.dp else 20.dp, vertical = 14.dp),
     ) {
-        Text(
-            if (compact) "Диспетчер Bruce" else "Быстрая запись",
-            style = MaterialTheme.typography.headlineSmall,
-        )
-        Text(
-            if (compact) "Продиктуйте или добавьте файл"
-            else "Текст, голос или файл — остальное сделает Диспетчер",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        Spacer(Modifier.height(if (compact) 10.dp else 16.dp))
-
         OutlinedTextField(
             value = state.text,
             onValueChange = viewModel::setText,
             enabled = !state.isBusy,
-            label = { Text("Что записать?") },
+            label = { Text("Добавьте текст или заметку") },
             modifier = Modifier
                 .fillMaxWidth()
-                .height(if (compact) 112.dp else 180.dp),
+                .height(if (inSheet) 140.dp else 180.dp),
             shape = RoundedCornerShape(20.dp),
         )
 
@@ -171,28 +161,10 @@ fun CaptureScreen(
             IconButton(
                 enabled = !state.isBusy && !state.isRecording,
                 onClick = {
-                    photoPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+                    photoPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo))
                 },
-            ) { Icon(Icons.Default.Image, contentDescription = "Выбрать фотографии") }
-            IconButton(
-                enabled = !state.isBusy,
-                onClick = {
-                    if (state.isRecording) viewModel.stopRecordingAndSave() else startWithPermission()
-                },
-            ) {
-                Icon(
-                    if (state.isRecording) Icons.Default.Stop else Icons.Default.Mic,
-                    contentDescription = if (state.isRecording) "Остановить запись" else "Записать голос",
-                    tint = if (state.isRecording) MaterialTheme.colorScheme.error
-                    else MaterialTheme.colorScheme.primary,
-                )
-            }
-            if (state.isRecording) {
-                RecordingLevelIndicator(
-                    amplitude = state.recordingAmplitude,
-                    modifier = Modifier.weight(1f),
-                )
-            } else state.statusMessage?.let { message ->
+            ) { Icon(Icons.Default.Image, contentDescription = "Выбрать фото или видео") }
+            state.statusMessage?.let { message ->
                 Surface(
                     color = if (state.isError) MaterialTheme.colorScheme.errorContainer
                     else MaterialTheme.colorScheme.secondaryContainer,
@@ -210,6 +182,32 @@ fun CaptureScreen(
             }
         }
         Spacer(Modifier.height(10.dp))
+        OutlinedButton(
+            onClick = {
+                if (state.isRecording) viewModel.stopRecordingAndAdd() else startWithPermission()
+            },
+            enabled = !state.isBusy,
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Icon(
+                if (state.isRecording) Icons.Default.Stop else Icons.Default.Mic,
+                contentDescription = null,
+            )
+            Spacer(Modifier.width(8.dp))
+            Text(
+                if (state.isRecording) "Остановить голосовое пояснение"
+                else "Добавить голосовое пояснение",
+            )
+        }
+        if (state.isRecording) {
+            RecordingLevelIndicator(
+                amplitude = state.recordingAmplitude,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 8.dp),
+            )
+        }
+        Spacer(Modifier.height(10.dp))
         Button(
             onClick = viewModel::save,
             enabled = !state.isBusy && !state.isRecording &&
@@ -217,14 +215,16 @@ fun CaptureScreen(
             modifier = Modifier.fillMaxWidth(),
             contentPadding = ButtonDefaults.ContentPadding,
         ) {
-            Text(if (state.isBusy) "Сохраняем…" else "Сохранить")
+            Text(if (state.isBusy) "Сохраняем…" else "Сохранить и закрыть")
         }
 
-        RecentJournal(
-            items = state.recentItems.take(if (compact) 2 else 4),
-            modifier = Modifier.padding(top = 16.dp),
-        )
-        Spacer(Modifier.height(if (compact) 18.dp else 8.dp))
+        if (showRecent) {
+            RecentJournal(
+                items = state.recentItems.take(if (inSheet) 2 else 4),
+                modifier = Modifier.padding(top = 16.dp),
+            )
+        }
+        Spacer(Modifier.height(if (inSheet) 18.dp else 8.dp))
     }
 }
 
