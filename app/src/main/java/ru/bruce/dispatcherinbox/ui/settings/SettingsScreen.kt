@@ -114,7 +114,7 @@ fun SettingsScreen(
         Text("Системный ассистент", style = MaterialTheme.typography.titleMedium)
         AssistantStatus()
         Text(
-            "На HyperOS экран обычно называется «Помощник и голосовой ввод». Выберите «Диспетчер Bruce» как цифрового помощника. Голосовой ввод менять не нужно: приложение не распознает речь.",
+            "На HyperOS экран обычно называется «Помощник и голосовой ввод». Выберите «CatChing» как цифрового помощника. Голосовой ввод менять не нужно: приложение не распознает речь.",
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             style = MaterialTheme.typography.bodySmall,
         )
@@ -130,7 +130,7 @@ fun SettingsScreen(
         HorizontalDivider()
         Text("Быстрый доступ", style = MaterialTheme.typography.titleMedium)
         Text(
-            "Добавьте плитку «Диспетчер Bruce» в шторку. На защищенном экране телефон сначала попросит разблокировку, затем сразу откроет запись.",
+            "Добавьте плитку «CatChing» в шторку. На защищенном экране телефон сначала попросит разблокировку, затем сразу откроет запись.",
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             style = MaterialTheme.typography.bodySmall,
         )
@@ -178,8 +178,8 @@ private fun AssistantStatus() {
         modifier = Modifier.fillMaxWidth(),
     ) {
         Text(
-            if (active) "Системный статус: Диспетчер Bruce активен"
-            else "Системный статус: Диспетчер Bruce пока не активен",
+            if (active) "Системный статус: CatChing активен"
+            else "Системный статус: CatChing пока не активен",
             modifier = Modifier.padding(horizontal = 12.dp, vertical = 9.dp),
             style = MaterialTheme.typography.bodyMedium,
         )

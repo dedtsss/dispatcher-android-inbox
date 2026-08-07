@@ -5,6 +5,7 @@ import android.net.Uri
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -20,19 +21,59 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.core.content.IntentCompat
 import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.viewmodel.compose.viewModel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import ru.bruce.dispatcherinbox.DispatcherApplication
 import ru.bruce.dispatcherinbox.data.AttachmentDraft
 import ru.bruce.dispatcherinbox.data.InboxSource
+import ru.bruce.dispatcherinbox.ui.capture.CatChingCaptureSheet
+import ru.bruce.dispatcherinbox.ui.capture.CaptureViewModel
 import ru.bruce.dispatcherinbox.ui.theme.DispatcherInboxTheme
 
 class ShareReceiverActivity : ComponentActivity() {
-    private var message by mutableStateOf("Сохраняем в Диспетчер Bruce…")
+    private var message by mutableStateOf("Сохраняем в CatChing…")
     private var running by mutableStateOf(true)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        val incomingText = textFrom(intent)
+        val incomingUris = extractUris(intent)
+        if (intent.action == Intent.ACTION_PROCESS_TEXT) {
+            enableEdgeToEdge()
+            showProcessTextSheet(incomingText, incomingUris)
+        } else {
+            showShareProgress()
+            lifecycleScope.launch { receiveShare(incomingText, incomingUris) }
+        }
+    }
+
+    private fun showProcessTextSheet(initialText: String?, initialUris: List<Uri>) {
+        val container = (application as DispatcherApplication).container
+        setContent {
+            DispatcherInboxTheme {
+                CatChingCaptureSheet(
+                    viewModel = viewModel(
+                        factory = CaptureViewModel.Factory(
+                            application = application,
+                            repository = container.inboxRepository,
+                            settingsRepository = container.settingsRepository,
+                            source = InboxSource.SELECTION_TEXT,
+                            applicationScope = container.applicationScope,
+                            initialText = initialText,
+                            initialUris = initialUris,
+                            closeOnSuccessfulSave = true,
+                        ),
+                    ),
+                    allowAutoStartVoice = false,
+                    onDismiss = ::finish,
+                    onSaved = ::finish,
+                )
+            }
+        }
+    }
+
+    private fun showShareProgress() {
         setContent {
             DispatcherInboxTheme {
                 Column(
@@ -45,17 +86,15 @@ class ShareReceiverActivity : ComponentActivity() {
                 }
             }
         }
-        lifecycleScope.launch { receiveShare(intent) }
     }
 
-    private suspend fun receiveShare(intent: Intent) {
+    private suspend fun receiveShare(text: String?, uris: List<Uri>) {
         val repository = (application as DispatcherApplication).container.inboxRepository
-        val text = intent.getCharSequenceExtra(Intent.EXTRA_TEXT)?.toString()
         val drafts = mutableListOf<AttachmentDraft>()
         try {
-            extractUris(intent).forEach { drafts += repository.stage(it) }
+            uris.forEach { drafts += repository.stage(it) }
             repository.save(text, drafts, InboxSource.SHARE)
-            message = "Сохранено в очередь"
+            message = "Сохранено в очередь CatChing"
         } catch (error: Exception) {
             drafts.forEach { runCatching { repository.discardDraft(it) } }
             message = error.message ?: "Не удалось сохранить"
@@ -63,6 +102,12 @@ class ShareReceiverActivity : ComponentActivity() {
         running = false
         delay(1_200)
         finish()
+    }
+
+    private fun textFrom(intent: Intent): String? = when (intent.action) {
+        Intent.ACTION_PROCESS_TEXT ->
+            intent.getCharSequenceExtra(Intent.EXTRA_PROCESS_TEXT)?.toString()
+        else -> intent.getCharSequenceExtra(Intent.EXTRA_TEXT)?.toString()
     }
 
     private fun extractUris(intent: Intent): List<Uri> {

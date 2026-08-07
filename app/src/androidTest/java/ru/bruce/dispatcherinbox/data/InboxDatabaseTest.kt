@@ -56,6 +56,15 @@ class InboxDatabaseTest {
                                 lastError TEXT, remoteId TEXT
                             )""".trimIndent(),
                         )
+                        db.execSQL(
+                            """INSERT INTO inbox_items (
+                                id, type, text, createdAt, updatedAt, status, source, retryCount,
+                                lastError, remoteId
+                            ) VALUES (
+                                'queued-item', 'text', 'Не потерять', 1, 1, 'queued', 'share', 0,
+                                NULL, NULL
+                            )""".trimIndent(),
+                        )
                     }
 
                     override fun onUpgrade(
@@ -69,6 +78,12 @@ class InboxDatabaseTest {
         val sqlite = helper.writableDatabase
 
         InboxDatabase.MIGRATION_1_2.migrate(sqlite)
+
+        sqlite.query("SELECT text, durationMillis FROM inbox_items WHERE id = 'queued-item'").use { cursor ->
+            assertTrue(cursor.moveToFirst())
+            assertEquals("Не потерять", cursor.getString(cursor.getColumnIndexOrThrow("text")))
+            assertTrue(cursor.isNull(cursor.getColumnIndexOrThrow("durationMillis")))
+        }
 
         sqlite.query("PRAGMA table_info(inbox_items)").use { cursor ->
             val nameColumn = cursor.getColumnIndexOrThrow("name")

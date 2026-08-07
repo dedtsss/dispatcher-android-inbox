@@ -84,11 +84,8 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.SpanStyle
-import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -124,6 +121,10 @@ fun CaptureScreen(
     compact: Boolean = false,
     isAssistantMode: Boolean = false,
     panelAlpha: Float = 1f,
+    allowAutoStartVoice: Boolean = true,
+    voiceAsDraft: Boolean = false,
+    inSheet: Boolean = false,
+    showRecent: Boolean = true,
     onOpenSettings: () -> Unit = {},
     onOpenQueue: () -> Unit = {},
 ) {
@@ -181,7 +182,7 @@ fun CaptureScreen(
     ) {
         if (!requestedAutoStart && state.defaultOpenMode != null) {
             requestedAutoStart = true
-            if (
+            if (allowAutoStartVoice && !state.hasInitialContent &&
                 CaptureLaunchPolicy.shouldAutoStartRecording(
                     isAssistantMode = isAssistantMode,
                     defaultOpenMode = state.defaultOpenMode,
@@ -200,38 +201,61 @@ fun CaptureScreen(
     BoxWithConstraints(
         modifier = modifier
             .fillMaxSize()
-            .background(if (isAssistantMode) Color.Transparent else DispatcherBackground)
+            .background(
+                when {
+                    isAssistantMode || inSheet -> Color.Transparent
+                    else -> DispatcherBackground
+                },
+            )
             .imePadding(),
     ) {
         val shortScreen = maxHeight < 700.dp
         val journalLimit = if (compact || shortScreen) 3 else 5
         val noteHeight = when {
+            inSheet -> 156.dp
             compact -> 148.dp
             shortScreen -> 156.dp
             else -> 188.dp
         }
 
         Surface(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(
-                    horizontal = if (compact) 8.dp else 12.dp,
-                    vertical = if (compact) 0.dp else 10.dp,
-                ),
-            shape = RoundedCornerShape(if (compact) 28.dp else 32.dp),
-            color = MaterialTheme.colorScheme.surface.copy(alpha = panelAlpha),
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(
+                        horizontal = when {
+                            inSheet -> 0.dp
+                            compact -> 8.dp
+                            else -> 12.dp
+                        },
+                        vertical = when {
+                            inSheet -> 0.dp
+                            compact -> 0.dp
+                            else -> 10.dp
+                        },
+                    ),
+            shape = RoundedCornerShape(if (inSheet) 0.dp else if (compact) 28.dp else 32.dp),
+            color = if (inSheet) MaterialTheme.colorScheme.surface
+            else MaterialTheme.colorScheme.surface.copy(alpha = panelAlpha),
             contentColor = MaterialTheme.colorScheme.onSurface,
-            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.72f)),
-            tonalElevation = 2.dp,
+            border = if (inSheet) BorderStroke(0.dp, Color.Transparent)
+            else BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.72f)),
+            tonalElevation = if (inSheet) 0.dp else 2.dp,
         ) {
             Column(
                 modifier = Modifier
                     .fillMaxSize()
                     .verticalScroll(rememberScrollState())
-                    .padding(horizontal = if (compact) 16.dp else 20.dp, vertical = 14.dp),
-                verticalArrangement = Arrangement.spacedBy(if (compact) 10.dp else 12.dp),
+                    .padding(
+                        horizontal = when {
+                            inSheet -> 18.dp
+                            compact -> 16.dp
+                            else -> 20.dp
+                        },
+                        vertical = 14.dp,
+                    ),
+                verticalArrangement = Arrangement.spacedBy(if (compact || inSheet) 10.dp else 12.dp),
             ) {
-                CaptureHeader(onOpenSettings = onOpenSettings)
+                if (!inSheet) CaptureHeader(onOpenSettings = onOpenSettings)
 
                 NoteField(
                     value = state.text,
@@ -252,20 +276,37 @@ fun CaptureScreen(
                     }
                 }
 
-                ActionButtons(
-                    isRecording = state.isRecording,
-                    voiceModeSelected = state.defaultOpenMode == DefaultOpenMode.VOICE,
-                    isBusy = state.isBusy,
-                    onVoiceClick = {
-                        if (state.isRecording) viewModel.cancelRecording() else startWithPermission()
-                    },
-                    onFileClick = { filePicker.launch("*/*") },
-                    onPhotoClick = {
-                        photoPicker.launch(
-                            PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly),
-                        )
-                    },
-                )
+                if (voiceAsDraft) {
+                    DraftActionButtons(
+                        isRecording = state.isRecording,
+                        isBusy = state.isBusy,
+                        onVoiceClick = {
+                            if (state.isRecording) viewModel.stopRecordingAndAdd() else startWithPermission()
+                        },
+                        onCancelRecording = viewModel::cancelRecording,
+                        onFileClick = { filePicker.launch("*/*") },
+                        onPhotoClick = {
+                            photoPicker.launch(
+                                PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo),
+                            )
+                        },
+                    )
+                } else {
+                    ActionButtons(
+                        isRecording = state.isRecording,
+                        voiceModeSelected = state.defaultOpenMode == DefaultOpenMode.VOICE,
+                        isBusy = state.isBusy,
+                        onVoiceClick = {
+                            if (state.isRecording) viewModel.cancelRecording() else startWithPermission()
+                        },
+                        onFileClick = { filePicker.launch("*/*") },
+                        onPhotoClick = {
+                            photoPicker.launch(
+                                PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly),
+                            )
+                        },
+                    )
+                }
 
                 state.statusMessage?.let { message ->
                     StatusMessage(
@@ -279,17 +320,23 @@ fun CaptureScreen(
                     isRecording = state.isRecording,
                     isSending = state.isBusy,
                     audioLevel = state.recordingAmplitude,
-                    enabled = !state.isBusy && (state.isRecording ||
-                        state.text.isNotBlank() || state.attachments.isNotEmpty()),
+                    enabled = !state.isBusy && if (voiceAsDraft) {
+                        !state.isRecording && (state.text.isNotBlank() || state.attachments.isNotEmpty())
+                    } else {
+                        state.isRecording || state.text.isNotBlank() || state.attachments.isNotEmpty()
+                    },
                     onClick = {
-                        if (state.isRecording) viewModel.stopRecordingAndSave() else viewModel.save()
+                        if (!voiceAsDraft && state.isRecording) viewModel.stopRecordingAndSave()
+                        else viewModel.save()
                     },
                 )
 
-                RecentJournal(
-                    items = state.recentItems.take(journalLimit),
-                    onOpenQueue = onOpenQueue,
-                )
+                if (showRecent) {
+                    RecentJournal(
+                        items = state.recentItems.take(journalLimit),
+                        onOpenQueue = onOpenQueue,
+                    )
+                }
 
                 CaptureFooter(
                     onOpenSettings = onOpenSettings,
@@ -306,7 +353,7 @@ fun CaptureScreen(
             title = { Text("О приложении") },
             text = {
                 Text(
-                    "Диспетчер Брюс ${BuildConfig.VERSION_NAME}\n\n" +
+                    "CatChing I ${BuildConfig.VERSION_NAME}\n\n" +
                         "Быстрый приём текста, голоса и файлов с надёжной локальной очередью.",
                 )
             },
@@ -324,10 +371,7 @@ private fun CaptureHeader(onOpenSettings: () -> Unit) {
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(
-            text = buildAnnotatedString {
-                append("Диспетчер ")
-                withStyle(SpanStyle(color = MaterialTheme.colorScheme.primary)) { append("Брюс") }
-            },
+            text = "CatChing I",
             modifier = Modifier.weight(1f),
             style = MaterialTheme.typography.headlineSmall,
             fontWeight = FontWeight.SemiBold,
@@ -421,6 +465,55 @@ private fun ActionButtons(
             onClick = onPhotoClick,
             modifier = Modifier.weight(1f),
         )
+    }
+}
+
+@Composable
+private fun DraftActionButtons(
+    isRecording: Boolean,
+    isBusy: Boolean,
+    onVoiceClick: () -> Unit,
+    onCancelRecording: () -> Unit,
+    onFileClick: () -> Unit,
+    onPhotoClick: () -> Unit,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        CaptureActionButton(
+            text = "Файл",
+            icon = Icons.Default.AttachFile,
+            enabled = !isBusy && !isRecording,
+            onClick = onFileClick,
+            modifier = Modifier.weight(1f),
+        )
+        CaptureActionButton(
+            text = "Фото/видео",
+            icon = Icons.Default.CameraAlt,
+            enabled = !isBusy && !isRecording,
+            onClick = onPhotoClick,
+            modifier = Modifier.weight(1f),
+        )
+    }
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        CaptureActionButton(
+            text = if (isRecording) "Завершить и добавить" else "Добавить голосовое пояснение",
+            icon = if (isRecording) Icons.Default.Stop else Icons.Default.Mic,
+            enabled = !isBusy,
+            active = isRecording,
+            onClick = onVoiceClick,
+            modifier = Modifier.weight(1f),
+        )
+        if (isRecording) {
+            IconButton(onClick = onCancelRecording, enabled = !isBusy) {
+                Icon(Icons.Default.Cancel, contentDescription = "Отменить запись")
+            }
+        }
     }
 }
 

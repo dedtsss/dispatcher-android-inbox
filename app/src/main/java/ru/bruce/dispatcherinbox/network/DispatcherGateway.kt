@@ -74,7 +74,11 @@ class RetrofitDispatcherGateway(
         try {
             val response = api.uploadItem("Bearer ${settings.bearerToken}", payload, files)
             val body = response.body()
-            if (response.isSuccessful && body?.ok == true && !body.remoteId.isNullOrBlank()) {
+            if (
+                response.isSuccessful &&
+                !body?.remoteId.isNullOrBlank() &&
+                (body?.ok == true || body?.status.equals("stored", ignoreCase = true))
+            ) {
                 UploadResult.Success(body.remoteId)
             } else {
                 UploadResult.Failure(

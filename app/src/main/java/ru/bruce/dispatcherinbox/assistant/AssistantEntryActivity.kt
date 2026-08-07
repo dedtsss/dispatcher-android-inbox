@@ -7,29 +7,15 @@ import androidx.activity.ComponentActivity
 import androidx.activity.addCallback
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.navigationBarsPadding
-import androidx.compose.material3.BottomSheetDefaults
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.rememberModalBottomSheetState
-import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import ru.bruce.dispatcherinbox.DispatcherApplication
 import ru.bruce.dispatcherinbox.MainActivity
 import ru.bruce.dispatcherinbox.data.InboxSource
-import ru.bruce.dispatcherinbox.ui.capture.CaptureScreen
+import ru.bruce.dispatcherinbox.ui.capture.CatChingCaptureSheet
 import ru.bruce.dispatcherinbox.ui.capture.CaptureViewModel
 import ru.bruce.dispatcherinbox.ui.theme.DispatcherInboxTheme
 
@@ -46,7 +32,7 @@ class AssistantEntryActivity : ComponentActivity() {
         setContent {
             DispatcherInboxTheme {
                 key(captureRequestId) {
-                    AssistantCaptureSheet(
+                    CatChingCaptureSheet(
                         viewModel = viewModel(
                             factory = CaptureViewModel.Factory(
                                 application,
@@ -56,8 +42,10 @@ class AssistantEntryActivity : ComponentActivity() {
                                 container.applicationScope,
                             ),
                         ),
-                        isAssistantMode = isAssistantMode,
+                        allowAutoStartVoice = isAssistantMode,
+                        voiceAsDraft = false,
                         onDismiss = ::hideAssistant,
+                        onSaved = ::hideAssistant,
                         onOpenSettings = { openMainApp("settings") },
                         onOpenQueue = { openMainApp("queue") },
                     )
@@ -101,53 +89,8 @@ class AssistantEntryActivity : ComponentActivity() {
 }
 
 private object AssistantWindowStyle {
-    private const val ASSISTANT_PANEL_OPACITY = 0.97f
-    private const val ASSISTANT_BACKGROUND_DIM = 0.42f
-
-    fun panelAlpha(isAssistantMode: Boolean): Float =
-        if (isAssistantMode) ASSISTANT_PANEL_OPACITY else 1f
+    private const val ASSISTANT_BACKGROUND_DIM = 0.18f
 
     fun backgroundDim(isAssistantMode: Boolean): Float =
         if (isAssistantMode) ASSISTANT_BACKGROUND_DIM else 0f
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun AssistantCaptureSheet(
-    viewModel: CaptureViewModel,
-    isAssistantMode: Boolean,
-    onDismiss: () -> Unit,
-    onOpenSettings: () -> Unit,
-    onOpenQueue: () -> Unit,
-) {
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-
-    BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
-        val sheetHeight = (maxHeight * 0.90f).coerceAtMost(760.dp)
-        ModalBottomSheet(
-            onDismissRequest = onDismiss,
-            sheetState = sheetState,
-            containerColor = Color.Transparent,
-            contentColor = androidx.compose.material3.MaterialTheme.colorScheme.onSurface,
-            scrimColor = Color.Transparent,
-            dragHandle = { BottomSheetDefaults.DragHandle() },
-        ) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(sheetHeight)
-                    .navigationBarsPadding(),
-            ) {
-                CaptureScreen(
-                    viewModel = viewModel,
-                    onClose = onDismiss,
-                    compact = true,
-                    isAssistantMode = isAssistantMode,
-                    panelAlpha = AssistantWindowStyle.panelAlpha(isAssistantMode),
-                    onOpenSettings = onOpenSettings,
-                    onOpenQueue = onOpenQueue,
-                )
-            }
-        }
-    }
 }

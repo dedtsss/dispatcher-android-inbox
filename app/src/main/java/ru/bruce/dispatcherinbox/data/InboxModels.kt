@@ -30,6 +30,7 @@ object InboxSource {
     const val MANUAL = "manual"
     const val ASSISTANT = "assistant"
     const val SHARE = "share"
+    const val SELECTION_TEXT = "selection_text"
 }
 
 @Entity(tableName = "inbox_items")
