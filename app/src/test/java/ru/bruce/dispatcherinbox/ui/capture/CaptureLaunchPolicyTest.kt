@@ -41,4 +41,29 @@ class CaptureLaunchPolicyTest {
             ),
         )
     }
+
+    @Test
+    fun `sheet and assistant launches do not auto focus text`() {
+        assertFalse(
+            CaptureLaunchPolicy.shouldAutoFocusText(
+                isAssistantMode = true,
+                inSheet = true,
+                defaultOpenMode = DefaultOpenMode.TEXT,
+            ),
+        )
+        assertFalse(
+            CaptureLaunchPolicy.shouldAutoFocusText(
+                isAssistantMode = false,
+                inSheet = true,
+                defaultOpenMode = DefaultOpenMode.TEXT,
+            ),
+        )
+        assertTrue(
+            CaptureLaunchPolicy.shouldAutoFocusText(
+                isAssistantMode = false,
+                inSheet = false,
+                defaultOpenMode = DefaultOpenMode.TEXT,
+            ),
+        )
+    }
 }

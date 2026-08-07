@@ -10,4 +10,10 @@ object CaptureLaunchPolicy {
     ): Boolean = isAssistantMode &&
         defaultOpenMode == DefaultOpenMode.VOICE &&
         autoStartAssistantRecording
+
+    fun shouldAutoFocusText(
+        isAssistantMode: Boolean,
+        inSheet: Boolean,
+        defaultOpenMode: String?,
+    ): Boolean = !isAssistantMode && !inSheet && defaultOpenMode == DefaultOpenMode.TEXT
 }

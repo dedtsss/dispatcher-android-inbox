@@ -5,11 +5,8 @@ import android.content.pm.PackageManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
@@ -25,6 +22,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -107,7 +105,6 @@ import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
-import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.sin
 
@@ -194,20 +191,29 @@ fun CaptureScreen(
         }
     }
     LaunchedEffect(state.defaultOpenMode) {
-        if (state.defaultOpenMode == DefaultOpenMode.TEXT) noteFocusRequester.requestFocus()
+        if (CaptureLaunchPolicy.shouldAutoFocusText(
+                isAssistantMode = isAssistantMode,
+                inSheet = inSheet,
+                defaultOpenMode = state.defaultOpenMode,
+            )
+        ) {
+            noteFocusRequester.requestFocus()
+        }
     }
     LaunchedEffect(viewModel) { viewModel.close.collect { onClose() } }
 
+    val rootModifier = modifier
+        .fillMaxSize()
+        .background(
+            when {
+                isAssistantMode || inSheet -> Color.Transparent
+                else -> DispatcherBackground
+            },
+        )
+        .let { base -> if (inSheet) base else base.imePadding() }
+
     BoxWithConstraints(
-        modifier = modifier
-            .fillMaxSize()
-            .background(
-                when {
-                    isAssistantMode || inSheet -> Color.Transparent
-                    else -> DispatcherBackground
-                },
-            )
-            .imePadding(),
+        modifier = rootModifier,
     ) {
         val shortScreen = maxHeight < 700.dp
         val journalLimit = if (compact || shortScreen) 3 else 5
@@ -241,107 +247,138 @@ fun CaptureScreen(
             else BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.72f)),
             tonalElevation = if (inSheet) 0.dp else 2.dp,
         ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .verticalScroll(rememberScrollState())
-                    .padding(
-                        horizontal = when {
-                            inSheet -> 18.dp
-                            compact -> 16.dp
-                            else -> 20.dp
-                        },
-                        vertical = 14.dp,
-                    ),
-                verticalArrangement = Arrangement.spacedBy(if (compact || inSheet) 10.dp else 12.dp),
-            ) {
-                if (!inSheet) CaptureHeader(onOpenSettings = onOpenSettings)
+            Column(modifier = Modifier.fillMaxSize()) {
+                Column(
+                    modifier = Modifier
+                        .weight(1f)
+                        .verticalScroll(rememberScrollState())
+                        .padding(
+                            horizontal = when {
+                                inSheet -> 18.dp
+                                compact -> 16.dp
+                                else -> 20.dp
+                            },
+                            vertical = 14.dp,
+                        ),
+                    verticalArrangement = Arrangement.spacedBy(if (compact || inSheet) 10.dp else 12.dp),
+                ) {
+                    if (!inSheet) CaptureHeader(onOpenSettings = onOpenSettings)
 
-                NoteField(
-                    value = state.text,
-                    onValueChange = viewModel::setText,
-                    enabled = !state.isBusy,
-                    height = noteHeight,
-                    focusRequester = noteFocusRequester,
-                )
+                    NoteField(
+                        value = state.text,
+                        onValueChange = viewModel::setText,
+                        enabled = !state.isBusy,
+                        height = noteHeight,
+                        focusRequester = noteFocusRequester,
+                    )
 
-                if (state.attachments.isNotEmpty()) {
-                    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        items(state.attachments, key = { it.id }) { draft ->
-                            AttachmentCard(
-                                draft = draft,
-                                onRemove = { viewModel.removeAttachment(draft) },
-                            )
+                    if (state.attachments.isNotEmpty()) {
+                        LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            items(state.attachments, key = { it.id }) { draft ->
+                                AttachmentCard(
+                                    draft = draft,
+                                    onRemove = { viewModel.removeAttachment(draft) },
+                                )
+                            }
                         }
                     }
-                }
 
-                if (voiceAsDraft) {
-                    DraftActionButtons(
-                        isRecording = state.isRecording,
-                        isBusy = state.isBusy,
-                        onVoiceClick = {
-                            if (state.isRecording) viewModel.stopRecordingAndAdd() else startWithPermission()
-                        },
-                        onCancelRecording = viewModel::cancelRecording,
-                        onFileClick = { filePicker.launch("*/*") },
-                        onPhotoClick = {
-                            photoPicker.launch(
-                                PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo),
-                            )
-                        },
-                    )
-                } else {
-                    ActionButtons(
-                        isRecording = state.isRecording,
-                        voiceModeSelected = state.defaultOpenMode == DefaultOpenMode.VOICE,
-                        isBusy = state.isBusy,
-                        onVoiceClick = {
-                            if (state.isRecording) viewModel.cancelRecording() else startWithPermission()
-                        },
-                        onFileClick = { filePicker.launch("*/*") },
-                        onPhotoClick = {
-                            photoPicker.launch(
-                                PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly),
-                            )
-                        },
-                    )
-                }
-
-                state.statusMessage?.let { message ->
-                    StatusMessage(
-                        message = message,
-                        isError = state.isError,
-                        isRecording = state.isRecording,
-                    )
-                }
-
-                DynamicSendButton(
-                    isRecording = state.isRecording,
-                    isSending = state.isBusy,
-                    audioLevel = state.recordingAmplitude,
-                    enabled = !state.isBusy && if (voiceAsDraft) {
-                        !state.isRecording && (state.text.isNotBlank() || state.attachments.isNotEmpty())
+                    if (voiceAsDraft) {
+                        DraftActionButtons(
+                            isRecording = state.isRecording,
+                            isBusy = state.isBusy,
+                            onVoiceClick = {
+                                if (state.isRecording) viewModel.stopRecordingAndAdd() else startWithPermission()
+                            },
+                            onCancelRecording = viewModel::cancelRecording,
+                            onFileClick = { filePicker.launch("*/*") },
+                            onPhotoClick = {
+                                photoPicker.launch(
+                                    PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo),
+                                )
+                            },
+                        )
                     } else {
-                        state.isRecording || state.text.isNotBlank() || state.attachments.isNotEmpty()
-                    },
-                    onClick = {
-                        if (!voiceAsDraft && state.isRecording) viewModel.stopRecordingAndSave()
-                        else viewModel.save()
-                    },
-                )
+                        ActionButtons(
+                            isRecording = state.isRecording,
+                            voiceModeSelected = state.defaultOpenMode == DefaultOpenMode.VOICE,
+                            isBusy = state.isBusy,
+                            onVoiceClick = {
+                                if (state.isRecording) viewModel.cancelRecording() else startWithPermission()
+                            },
+                            onFileClick = { filePicker.launch("*/*") },
+                            onPhotoClick = {
+                                photoPicker.launch(
+                                    PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly),
+                                )
+                            },
+                        )
+                    }
 
-                if (showRecent) {
-                    RecentJournal(
-                        items = state.recentItems.take(journalLimit),
-                        onOpenQueue = onOpenQueue,
+                    state.statusMessage?.let { message ->
+                        StatusMessage(
+                            message = message,
+                            isError = state.isError,
+                            isRecording = state.isRecording,
+                        )
+                    }
+
+                    if (!inSheet) {
+                        DynamicSendButton(
+                            isRecording = state.isRecording,
+                            isSending = state.isBusy,
+                            audioLevel = state.recordingAmplitude,
+                            enabled = !state.isBusy && if (voiceAsDraft) {
+                                !state.isRecording && (state.text.isNotBlank() || state.attachments.isNotEmpty())
+                            } else {
+                                state.isRecording || state.text.isNotBlank() || state.attachments.isNotEmpty()
+                            },
+                            onClick = {
+                                if (!voiceAsDraft && state.isRecording) viewModel.stopRecordingAndSave()
+                                else viewModel.save()
+                            },
+                        )
+                    }
+
+                    if (showRecent) {
+                        RecentJournal(
+                            items = state.recentItems.take(journalLimit),
+                            onOpenQueue = onOpenQueue,
+                        )
+                    }
+
+                    CaptureFooter(
+                        onOpenSettings = onOpenSettings,
+                        onOpenAbout = { showAbout = true },
                     )
                 }
 
-                CaptureFooter(
-                    onOpenSettings = onOpenSettings,
-                    onOpenAbout = { showAbout = true },
-                )
+                if (inSheet) {
+                    Surface(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .navigationBarsPadding()
+                            .imePadding(),
+                        color = MaterialTheme.colorScheme.surface,
+                        tonalElevation = 2.dp,
+                    ) {
+                        DynamicSendButton(
+                            isRecording = state.isRecording,
+                            isSending = state.isBusy,
+                            audioLevel = state.recordingAmplitude,
+                            enabled = !state.isBusy && if (voiceAsDraft) {
+                                !state.isRecording && (state.text.isNotBlank() || state.attachments.isNotEmpty())
+                            } else {
+                                state.isRecording || state.text.isNotBlank() || state.attachments.isNotEmpty()
+                            },
+                            onClick = {
+                                if (!voiceAsDraft && state.isRecording) viewModel.stopRecordingAndSave()
+                                else viewModel.save()
+                            },
+                            modifier = Modifier.padding(horizontal = 18.dp, vertical = 10.dp),
+                        )
+                    }
+                }
             }
         }
     }
@@ -632,18 +669,6 @@ fun AudioWaveform(
         animationSpec = tween(220),
         label = "waveformLevel",
     )
-    val phase = if (isRecording) {
-        val transition = rememberInfiniteTransition(label = "waveformMotion")
-        val animatedPhase by transition.animateFloat(
-            initialValue = 0f,
-            targetValue = (2f * PI).toFloat(),
-            animationSpec = infiniteRepeatable(tween(1_400, easing = LinearEasing)),
-            label = "waveformPhase",
-        )
-        animatedPhase
-    } else {
-        0f
-    }
     val waveColor = MaterialTheme.colorScheme.primary
 
     Canvas(
@@ -654,7 +679,14 @@ fun AudioWaveform(
         val count = 44
         val gap = size.width / (count * 2.05f)
         val barWidth = gap * 0.62f
-        val activeLevel = (0.14f + level * 0.86f).coerceIn(0.14f, 1f)
+        val centerY = size.height / 2f
+        val baselineHeight = (size.height * 0.018f).coerceAtLeast(1f)
+        drawRoundRect(
+            color = waveColor.copy(alpha = if (level > 0.01f) 0.30f else 0.24f),
+            topLeft = Offset(0f, centerY - baselineHeight / 2f),
+            size = Size(size.width, baselineHeight),
+            cornerRadius = CornerRadius(baselineHeight, baselineHeight),
+        )
         repeat(count) { index ->
             val centerX = (index + 0.5f) * size.width / count
             val normalizedX = centerX / size.width
@@ -663,14 +695,13 @@ fun AudioWaveform(
 
             val edgeFade = (distanceFromCenter / 0.5f).coerceIn(0f, 1f)
             val centerFade = ((distanceFromCenter - 0.18f) / 0.14f).coerceIn(0f, 1f)
-            val motion = if (isRecording) phase else 0f
-            val pattern = (0.38f + 0.62f * abs(sin(index * 0.62f + motion)))
+            val pattern = (0.38f + 0.62f * abs(sin(index * 0.62f)))
             val envelope = (1f - abs(normalizedX - 0.5f) * 0.72f).coerceAtLeast(0.38f)
-            val barHeight = (size.height * (0.10f + activeLevel * pattern * envelope))
-                .coerceIn(size.height * 0.10f, size.height * 0.84f)
+            val barHeight = (baselineHeight + size.height * level * 0.92f * pattern * envelope)
+                .coerceAtMost(size.height * 0.84f)
             drawRoundRect(
                 color = waveColor.copy(
-                    alpha = (0.18f + activeLevel * 0.72f) * edgeFade * centerFade,
+                    alpha = (0.16f + level * 0.76f) * edgeFade * centerFade,
                 ),
                 topLeft = Offset(centerX - barWidth / 2f, (size.height - barHeight) / 2f),
                 size = Size(barWidth, barHeight),

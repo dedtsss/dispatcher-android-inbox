@@ -332,9 +332,10 @@ class CaptureViewModel(
         amplitudeJob = viewModelScope.launch {
             var smoothed = 0f
             while (localState.value.isRecording) {
-                val raw = recorder.currentAmplitude().coerceIn(0, 32_767) / 32_767f
-                val visibleLevel = kotlin.math.sqrt(raw)
-                smoothed = smoothed * 0.78f + visibleLevel * 0.22f
+                val visibleLevel = recordingVisualLevel(recorder.currentAmplitude())
+                val smoothing = if (visibleLevel > smoothed) 0.36f else 0.18f
+                smoothed += (visibleLevel - smoothed) * smoothing
+                if (visibleLevel == 0f && smoothed < 0.015f) smoothed = 0f
                 localState.value = localState.value.copy(recordingAmplitude = smoothed)
                 delay(100)
             }

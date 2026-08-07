@@ -25,6 +25,10 @@ class AssistantEntryActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        window.setSoftInputMode(
+            WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_HIDDEN or
+                WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE,
+        )
         onBackPressedDispatcher.addCallback(this) { hideAssistant() }
         val isAssistantMode = true
         configureAssistantWindow(isAssistantMode)

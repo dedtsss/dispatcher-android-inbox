@@ -3,6 +3,7 @@ package ru.bruce.dispatcherinbox.share
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
+import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -41,6 +42,10 @@ class ShareReceiverActivity : ComponentActivity() {
         val incomingUris = extractUris(intent)
         if (intent.action == Intent.ACTION_PROCESS_TEXT) {
             enableEdgeToEdge()
+            window.setSoftInputMode(
+                WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_HIDDEN or
+                    WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE,
+            )
             showProcessTextSheet(incomingText, incomingUris)
         } else {
             showShareProgress()
