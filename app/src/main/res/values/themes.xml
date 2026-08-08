@@ -9,13 +9,18 @@
         <item name="android:windowActionModeOverlay">true</item>
     </style>
 
+    <style name="DispatcherInboxInstantWindowAnimation">
+        <item name="android:windowEnterAnimation">@anim/dispatcher_inbox_instant</item>
+        <item name="android:windowExitAnimation">@anim/dispatcher_inbox_instant</item>
+    </style>
+
     <style name="Theme.DispatcherInbox.Assistant" parent="Theme.DispatcherInbox">
         <item name="android:windowIsTranslucent">true</item>
         <item name="android:windowBackground">@android:color/transparent</item>
         <item name="android:windowNoTitle">true</item>
         <item name="android:backgroundDimEnabled">true</item>
         <item name="android:windowDisablePreview">true</item>
-        <item name="android:windowAnimationStyle">@android:style/Animation.Translucent</item>
+        <item name="android:windowAnimationStyle">@style/DispatcherInboxInstantWindowAnimation</item>
         <item name="android:colorBackgroundCacheHint">@null</item>
         <item name="android:forceDarkAllowed" tools:targetApi="q">false</item>
         <item name="android:statusBarColor">@android:color/transparent</item>
