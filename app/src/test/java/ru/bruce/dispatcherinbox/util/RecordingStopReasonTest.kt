@@ -14,6 +14,7 @@ class RecordingStopReasonTest {
     @Test
     fun `send and timeout save queue item`() {
         assertTrue(RecordingStopReason.SEND.shouldSave)
+        assertTrue(RecordingStopReason.ADD_TO_DRAFT.shouldSave)
         assertTrue(RecordingStopReason.TIMEOUT.shouldSave)
     }
 }

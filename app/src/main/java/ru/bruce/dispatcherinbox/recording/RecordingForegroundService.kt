@@ -53,7 +53,7 @@ class RecordingForegroundService : Service() {
         )
         return Notification.Builder(this, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_quick_capture_tile)
-            .setContentTitle("Идёт запись Диспетчера Брюс")
+            .setContentTitle("Идёт запись CatChing")
             .setContentText("Нажмите, чтобы вернуться к записи")
             .setContentIntent(openApp)
             .setOngoing(true)

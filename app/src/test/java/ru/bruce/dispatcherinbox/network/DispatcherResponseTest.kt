@@ -15,9 +15,21 @@ class DispatcherResponseTest {
             DispatcherResponse::class.java,
         )
 
-        assertTrue(response.ok)
+        assertTrue(response.ok == true)
         assertEquals("rec123", response.remoteId)
         assertEquals("stored", response.status)
+    }
+
+    @Test
+    fun `accepts stored response when ok flag is omitted`() {
+        val response = gson.fromJson(
+            """{"remote_id":"rec-stored","status":"stored"}""",
+            DispatcherResponse::class.java,
+        )
+
+        assertEquals("rec-stored", response.remoteId)
+        assertEquals("stored", response.status)
+        assertEquals(null, response.ok)
     }
 
     @Test
@@ -27,7 +39,7 @@ class DispatcherResponseTest {
             DispatcherResponse::class.java,
         )
 
-        assertTrue(response.ok)
+        assertTrue(response.ok == true)
         assertEquals("legacy-123", response.remoteId)
     }
 }

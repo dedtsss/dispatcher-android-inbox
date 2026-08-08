@@ -20,7 +20,7 @@ interface DispatcherApi {
 }
 
 data class DispatcherResponse(
-    val ok: Boolean,
+    val ok: Boolean? = null,
     @SerializedName(value = "remote_id", alternate = ["dispatcherItemId"])
     val remoteId: String?,
     val status: String? = null,
