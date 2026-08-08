@@ -347,19 +347,21 @@ fun CaptureScreen(
                         )
                     }
 
-                    CaptureFooter(
-                        onOpenSettings = onOpenSettings,
-                        onOpenAbout = { showAbout = true },
-                    )
+                    if (!inSheet) {
+                        CaptureFooter(
+                            onOpenSettings = onOpenSettings,
+                            onOpenAbout = { showAbout = true },
+                        )
+                    }
                 }
 
                 if (inSheet) {
                     Surface(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .navigationBarsPadding()
-                            .imePadding(),
-                        color = MaterialTheme.colorScheme.surface,
+                            .imePadding()
+                            .navigationBarsPadding(),
+                        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.98f),
                         tonalElevation = 2.dp,
                     ) {
                         DynamicSendButton(

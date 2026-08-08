@@ -42,7 +42,7 @@ import androidx.navigation.compose.rememberNavController
 import kotlinx.coroutines.launch
 import ru.bruce.dispatcherinbox.data.InboxSource
 import ru.bruce.dispatcherinbox.quick.QuickCaptureTileService
-import ru.bruce.dispatcherinbox.ui.capture.CatChingCaptureSheet
+import ru.bruce.dispatcherinbox.ui.capture.CatChingCaptureOverlay
 import ru.bruce.dispatcherinbox.ui.capture.CaptureScreen
 import ru.bruce.dispatcherinbox.ui.capture.CaptureViewModel
 import ru.bruce.dispatcherinbox.ui.queue.QueueScreen
@@ -278,7 +278,7 @@ private fun InboxApp(
                     ),
                 )
                 if (captureSheetVisible) {
-                    CatChingCaptureSheet(
+                    CatChingCaptureOverlay(
                         viewModel = captureViewModel,
                         allowAutoStartVoice = false,
                         onDismiss = { captureSheetVisible = false },

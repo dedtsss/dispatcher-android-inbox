@@ -28,7 +28,7 @@ import kotlinx.coroutines.launch
 import ru.bruce.dispatcherinbox.DispatcherApplication
 import ru.bruce.dispatcherinbox.data.AttachmentDraft
 import ru.bruce.dispatcherinbox.data.InboxSource
-import ru.bruce.dispatcherinbox.ui.capture.CatChingCaptureSheet
+import ru.bruce.dispatcherinbox.ui.capture.CatChingCaptureOverlay
 import ru.bruce.dispatcherinbox.ui.capture.CaptureViewModel
 import ru.bruce.dispatcherinbox.ui.theme.DispatcherInboxTheme
 
@@ -57,7 +57,7 @@ class ShareReceiverActivity : ComponentActivity() {
         val container = (application as DispatcherApplication).container
         setContent {
             DispatcherInboxTheme {
-                CatChingCaptureSheet(
+                CatChingCaptureOverlay(
                     viewModel = viewModel(
                         factory = CaptureViewModel.Factory(
                             application = application,

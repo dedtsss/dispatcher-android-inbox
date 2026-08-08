@@ -15,7 +15,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import ru.bruce.dispatcherinbox.DispatcherApplication
 import ru.bruce.dispatcherinbox.MainActivity
 import ru.bruce.dispatcherinbox.data.InboxSource
-import ru.bruce.dispatcherinbox.ui.capture.CatChingCaptureSheet
+import ru.bruce.dispatcherinbox.ui.capture.CatChingCaptureOverlay
 import ru.bruce.dispatcherinbox.ui.capture.CaptureViewModel
 import ru.bruce.dispatcherinbox.ui.theme.DispatcherInboxTheme
 
@@ -31,12 +31,11 @@ class AssistantEntryActivity : ComponentActivity() {
         )
         onBackPressedDispatcher.addCallback(this) { hideAssistant() }
         val isAssistantMode = true
-        configureAssistantWindow(isAssistantMode)
         val container = (application as DispatcherApplication).container
         setContent {
             DispatcherInboxTheme {
                 key(captureRequestId) {
-                    CatChingCaptureSheet(
+                    CatChingCaptureOverlay(
                         viewModel = viewModel(
                             factory = CaptureViewModel.Factory(
                                 application,
@@ -62,20 +61,10 @@ class AssistantEntryActivity : ComponentActivity() {
         super.onNewIntent(intent)
         setIntent(intent)
         captureRequestId += 1
-        configureAssistantWindow(true)
     }
 
     private fun hideAssistant() {
         moveTaskToBack(true)
-    }
-
-    private fun configureAssistantWindow(isAssistantMode: Boolean) {
-        if (!isAssistantMode) return
-        window.addFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND)
-        window.attributes = window.attributes.apply {
-            dimAmount = AssistantWindowStyle.backgroundDim(isAssistantMode)
-            alpha = 1f
-        }
     }
 
     private fun openMainApp(destination: String) {
@@ -90,11 +79,4 @@ class AssistantEntryActivity : ComponentActivity() {
         )
         moveTaskToBack(true)
     }
-}
-
-private object AssistantWindowStyle {
-    private const val ASSISTANT_BACKGROUND_DIM = 0.18f
-
-    fun backgroundDim(isAssistantMode: Boolean): Float =
-        if (isAssistantMode) ASSISTANT_BACKGROUND_DIM else 0f
 }

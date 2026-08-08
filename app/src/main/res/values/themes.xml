@@ -23,5 +23,5 @@
         <item name="android:windowLightStatusBar">false</item>
     </style>
 
-    <style name="Theme.DispatcherInbox.Share" parent="Theme.DispatcherInbox" />
+    <style name="Theme.DispatcherInbox.Share" parent="Theme.DispatcherInbox.Assistant" />
 </resources>
