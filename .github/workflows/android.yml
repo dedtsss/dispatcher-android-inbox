@@ -1,8 +1,6 @@
-name: Android
+name: Android Debug APK (manual)
 
 on:
-  push:
-  pull_request:
   workflow_dispatch:
 
 permissions:
@@ -59,3 +57,4 @@ jobs:
           name: priemnik-debug-apk
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
+          retention-days: 3
