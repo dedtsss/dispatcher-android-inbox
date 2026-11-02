@@ -31,6 +31,7 @@ class MigrationTest {
                 assertEquals("исходник.m4a", attachment.originalName)
                 assertEquals("audio/mp4", attachment.mimeType)
                 assertEquals(5L, attachment.sizeBytes)
+                assertEquals(File(context.filesDir, "upgrade-original.m4a").absolutePath, attachment.localPath)
                 val bytes = File(attachment.localPath).readBytes()
                 assertArrayEquals(byteArrayOf(0, 1, -1, 10, 42), bytes)
                 assertEquals(MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(it) }, attachment.checksum)

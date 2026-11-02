@@ -1,7 +1,6 @@
 name: Проверка и выпуск Catching APK
 
 on:
-  pull_request:
   push:
     branches: [issue-7-drive-inbox]
   workflow_dispatch:

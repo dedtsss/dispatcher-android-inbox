@@ -21,6 +21,7 @@ for label in v1 v2 v060; do
     sleep 5
     adb logcat -d -s AndroidRuntime > upgrade-evidence/v2-to-060-crash.txt
     grep -q 'Room cannot verify the data integrity' upgrade-evidence/v2-to-060-crash.txt
+    adb logcat -c
   fi
   adb shell am force-stop ru.bruce.dispatcherinbox
   adb install -r apk/release/app-release.apk
