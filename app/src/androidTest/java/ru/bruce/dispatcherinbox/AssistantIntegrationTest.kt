@@ -21,6 +21,7 @@ class AssistantIntegrationTest {
         settings.setCloseAfterSave(false)
         fun screenshot(name: String) {
             val dir = File(context.getExternalFilesDir(null), "catching-evidence").apply { mkdirs() }
+            device.waitForIdle()
             assertTrue(device.takeScreenshot(File(dir, "$name.png")))
         }
         val intent = Intent(context, AssistantEntryActivity::class.java).setAction(Intent.ACTION_ASSIST)
@@ -29,7 +30,16 @@ class AssistantIntegrationTest {
         ActivityScenario.launch<AssistantEntryActivity>(intent).use {
             assertTrue(device.wait(Until.hasObject(By.clazz("android.widget.EditText").focused(true)), 10000))
             assertFalse(device.hasObject(By.desc("Остановить и сохранить")))
+            assertTrue(device.hasObject(By.text("Сохранить")))
             screenshot("04-assistant-text-focused")
+            val marker = "assistant-text-${System.nanoTime()}"
+            device.findObject(By.clazz("android.widget.EditText")).text = marker
+            device.waitForIdle()
+            device.findObject(By.text("Сохранить")).click()
+            val dao = (context.applicationContext as DispatcherApplication).container.dao
+            kotlinx.coroutines.withTimeout(10000) {
+                while (dao.getPending().none { entry -> entry.item.text == marker && entry.item.source == "assistant" }) kotlinx.coroutines.delay(100)
+            }
         }
         settings.setAssistantOpenMode("voice")
         settings.setAutoStartAssistantRecording(false)

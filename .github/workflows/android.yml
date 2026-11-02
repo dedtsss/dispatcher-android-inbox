@@ -5,6 +5,11 @@ on:
     branches: [issue-7-drive-inbox]
   workflow_dispatch:
     inputs:
+      history_run_id:
+        description: Необязательно — взять неизменённые исторические APK из указанного запуска с проверкой SHA-256
+        required: false
+        default: ""
+        type: string
       apk_run_id:
         description: Необязательно — повторить device-проверку APK из указанного запуска без пересборки
         required: false
@@ -55,6 +60,7 @@ jobs:
       - name: Собрать исторические APK с прежними схемами и постоянной подписью
         env:
           GH_TOKEN: ${{ github.token }}
+          HISTORY_RUN_ID: ${{ inputs.history_run_id }}
           DISPATCHER_SIGNING_STORE_FILE: ${{ runner.temp }}/dispatcher-signing/dispatcher.jks
           DISPATCHER_SIGNING_STORE_PASSWORD: ${{ secrets.DISPATCHER_SIGNING_STORE_PASSWORD }}
           DISPATCHER_SIGNING_KEY_ALIAS: ${{ secrets.DISPATCHER_SIGNING_KEY_ALIAS }}

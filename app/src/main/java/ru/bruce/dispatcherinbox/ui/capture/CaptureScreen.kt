@@ -141,7 +141,7 @@ fun CaptureScreen(
             .padding(horizontal = if (compact) 18.dp else 20.dp, vertical = 14.dp),
     ) {
         Box(
-            modifier = Modifier.fillMaxWidth().height(if (compact) 64.dp else 88.dp)
+            modifier = Modifier.fillMaxWidth().height(if (compact) 56.dp else 88.dp)
                 .background(Brush.radialGradient(listOf(MaterialTheme.colorScheme.primary.copy(alpha = 0.10f), Color.Transparent))),
             contentAlignment = Alignment.Center,
         ) {
@@ -153,10 +153,10 @@ fun CaptureScreen(
         }
         if (!compact) Text("Сначала на телефоне · затем в Google Drive", style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.align(Alignment.CenterHorizontally))
-        VoiceControl(state, compact, onClick = { if (state.isRecording) viewModel.stopRecordingAndSave() else startWithPermission() })
+        if (!compact || !textExpanded) VoiceControl(state, compact, onClick = { if (state.isRecording) viewModel.stopRecordingAndSave() else startWithPermission() })
         Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             OutlinedButton(onClick = { textExpanded = !textExpanded }, enabled = !state.isBusy && !state.isRecording,
-                modifier = Modifier.weight(1f)) { Icon(Icons.Default.Keyboard, null, Modifier.size(18.dp)); Spacer(Modifier.width(6.dp)); Text("Текст") }
+                modifier = Modifier.weight(1f)) { Icon(if (compact && textExpanded) Icons.Default.Mic else Icons.Default.Keyboard, null, Modifier.size(18.dp)); Spacer(Modifier.width(6.dp)); Text(if (compact && textExpanded) "Голос" else "Текст") }
             OutlinedButton(onClick = { filePicker.launch("*/*") }, enabled = !state.isBusy && !state.isRecording,
                 modifier = Modifier.weight(1f)) { Icon(Icons.Default.AttachFile, null, Modifier.size(18.dp)); Spacer(Modifier.width(6.dp)); Text("Файл") }
         }
