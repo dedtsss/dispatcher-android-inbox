@@ -65,8 +65,7 @@ class CaptureIntegrationTest {
             assertTrue(device.wait(Until.hasObject(By.text("Голос")), 10000))
             screenshot("01-main")
             device.findObject(By.text("Текст")).click()
-            val input = device.wait(Until.findObject(By.clazz("android.widget.EditText")), 5000)
-            assertNotNull(input)
+            val input = checkNotNull(device.wait(Until.findObject(By.clazz("android.widget.EditText")), 5000)) { "Текстовое поле не открылось" }
             val uiText = "Текст через интерфейс без сети"
             input.click()
             input.text = uiText
