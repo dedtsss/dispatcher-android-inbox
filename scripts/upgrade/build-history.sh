@@ -18,7 +18,8 @@ for entry in v1:2c42012c9ba655f74699bf9b7928b5f75c20b006 v2:7f7dbc7c9bc39d69a65b
   cp "$dir/app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk" "history-apk/$label/"
   cp "$dir/app/build/generated/source/kapt/debug/ru/bruce/dispatcherinbox/data/InboxDatabase_Impl.java" "history-apk/$label/"
   if [ "$label" = v060 ]; then
-    curl --fail --location --retry 3 https://github.com/dedtsss/dispatcher-android-inbox/releases/download/migration-fixtures-issue-7/catching-0.6.0-release.apk -o "history-apk/$label/app-release.apk"
+    gh release download migration-fixtures-issue-7 --repo dedtsss/dispatcher-android-inbox --pattern catching-0.6.0-release.apk --dir "$RUNNER_TEMP/original-060" --clobber
+    cp "$RUNNER_TEMP/original-060/catching-0.6.0-release.apk" "history-apk/$label/app-release.apk"
     echo 'ad71d7586c356d902f426847afb02002e132cfb0795f5b5fd5a3fc5c2a19a6bd  history-apk/v060/app-release.apk' | sha256sum -c -
   fi
   printf '%s\n' "$ref" > "history-apk/$label/source.txt"

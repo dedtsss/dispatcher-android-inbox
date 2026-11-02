@@ -52,6 +52,7 @@ jobs:
         run: ./gradlew testReleaseUnitTest lintRelease assembleRelease assembleDebug assembleDebugAndroidTest --stacktrace
       - name: Собрать исторические APK с прежними схемами и постоянной подписью
         env:
+          GH_TOKEN: ${{ github.token }}
           DISPATCHER_SIGNING_STORE_FILE: ${{ runner.temp }}/dispatcher-signing/dispatcher.jks
           DISPATCHER_SIGNING_STORE_PASSWORD: ${{ secrets.DISPATCHER_SIGNING_STORE_PASSWORD }}
           DISPATCHER_SIGNING_KEY_ALIAS: ${{ secrets.DISPATCHER_SIGNING_KEY_ALIAS }}
