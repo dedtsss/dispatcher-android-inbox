@@ -64,6 +64,16 @@ class CaptureIntegrationTest {
         ActivityScenario.launch(MainActivity::class.java).use {
             assertTrue(device.wait(Until.hasObject(By.text("Голос")), 10000))
             screenshot("01-main")
+            device.findObject(By.text("Текст")).click()
+            val input = device.wait(Until.findObject(By.clazz("android.widget.EditText")), 5000)
+            assertNotNull(input)
+            val uiText = "Текст через интерфейс без сети"
+            input.text = uiText
+            device.pressBack()
+            screenshot("01-text-expanded")
+            device.findObject(By.text("Сохранить")).click()
+            val captured = awaitItem(uiText)
+            assertEquals(InboxStatus.QUEUED, captured.item.status)
             val recorder = VoiceRecorder(context)
             val file = container.inboxRepository.newVoiceFile()
             instrumentation.runOnMainSync { recorder.start(file) }
