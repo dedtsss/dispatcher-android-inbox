@@ -5,6 +5,7 @@ import android.content.pm.PackageManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.material3.OutlinedButton
@@ -133,6 +134,12 @@ fun CaptureScreen(
             enabled = !state.isBusy,
             modifier = Modifier.fillMaxWidth().height(if (compact) 72.dp else 96.dp),
             shape = RoundedCornerShape(28.dp),
+            colors = ButtonDefaults.buttonColors(
+                containerColor = if (state.isRecording) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant,
+                contentColor = MaterialTheme.colorScheme.primary,
+            ),
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.25f)),
+            elevation = ButtonDefaults.buttonElevation(defaultElevation = 6.dp),
         ) {
             Icon(if (state.isRecording) Icons.Default.Stop else Icons.Default.Mic, null, Modifier.size(32.dp))
             Spacer(Modifier.width(12.dp))
