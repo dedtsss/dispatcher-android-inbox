@@ -16,15 +16,15 @@ class SyncScheduler(
     private val context: Context,
     private val settingsRepository: SettingsRepository,
 ) {
-    suspend fun scheduleAutomatic() {
+    suspend fun scheduleAutomatic(replace: Boolean = false) {
         val settings = settingsRepository.settings.first()
         if (!settings.autoSync) return
-        enqueue(manual = false, wifiOnly = settings.wifiOnly)
+        enqueue(manual = false, wifiOnly = settings.wifiOnly, replace = replace)
     }
 
-    fun scheduleManual() = enqueue(manual = true, wifiOnly = false)
+    fun scheduleManual() = enqueue(manual = true, wifiOnly = false, replace = true)
 
-    private fun enqueue(manual: Boolean, wifiOnly: Boolean) {
+    private fun enqueue(manual: Boolean, wifiOnly: Boolean, replace: Boolean) {
         val constraints = Constraints.Builder()
             .setRequiredNetworkType(if (wifiOnly) NetworkType.UNMETERED else NetworkType.CONNECTED)
             .build()
@@ -35,7 +35,7 @@ class SyncScheduler(
             .build()
         WorkManager.getInstance(context).enqueueUniqueWork(
             UNIQUE_WORK_NAME,
-            if (manual) ExistingWorkPolicy.REPLACE else ExistingWorkPolicy.APPEND_OR_REPLACE,
+            if (replace) ExistingWorkPolicy.REPLACE else ExistingWorkPolicy.APPEND_OR_REPLACE,
             request,
         )
     }

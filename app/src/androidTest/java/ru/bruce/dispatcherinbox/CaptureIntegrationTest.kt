@@ -42,6 +42,8 @@ class CaptureIntegrationTest {
         val savedText = container.inboxRepository.save(text, emptyList())
         assertEquals(text, container.dao.getById(savedText.id)!!.item.text)
         assertEquals(InboxStatus.QUEUED, container.dao.getById(savedText.id)!!.item.status)
+        container.settingsRepository.setWifiOnly(true)
+        container.settingsRepository.setWifiOnly(false)
         Thread.sleep(1500)
         val work = androidx.work.WorkManager.getInstance(context).getWorkInfosForUniqueWork("dispatcher-inbox-sync").get()
         assertTrue(work.any { it.state == androidx.work.WorkInfo.State.ENQUEUED })

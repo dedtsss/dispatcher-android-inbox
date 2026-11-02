@@ -45,9 +45,12 @@ class SettingsRepository(private val context: Context) {
 
     suspend fun setAutoSync(value: Boolean) {
         update(Keys.autoSync, value)
-        if (value) ru.bruce.dispatcherinbox.sync.SyncScheduler(context, this).scheduleAutomatic()
+        if (value) ru.bruce.dispatcherinbox.sync.SyncScheduler(context, this).scheduleAutomatic(replace = true)
     }
-    suspend fun setWifiOnly(value: Boolean) = update(Keys.wifiOnly, value)
+    suspend fun setWifiOnly(value: Boolean) {
+        update(Keys.wifiOnly, value)
+        ru.bruce.dispatcherinbox.sync.SyncScheduler(context, this).scheduleAutomatic(replace = true)
+    }
     suspend fun setDefaultOpenMode(value: String) = update(Keys.defaultOpenMode, value)
     suspend fun setCloseAfterSave(value: Boolean) = update(Keys.closeAfterSave, value)
 
