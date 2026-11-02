@@ -168,6 +168,7 @@ class CaptureIntegrationTest {
         assertFalse(drainer.drain(AppSettings()))
         pending.forEach { assertEquals(InboxStatus.SYNCED, container.dao.getById(it.item.id)!!.item.status) }
         originals.forEach { (path, bytes) -> assertArrayEquals(bytes, File(path).readBytes()) }
+        container.inboxRepository.save("process-restart-marker", listOf(container.inboxRepository.stage(original)))
     }
 
     private suspend fun awaitItem(text: String): InboxItemWithAttachments {

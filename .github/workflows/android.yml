@@ -104,10 +104,13 @@ jobs:
             adb shell pm grant ru.bruce.dispatcherinbox android.permission.RECORD_AUDIO
             adb shell svc wifi disable
             adb shell svc data disable
-            adb shell am instrument -w ru.bruce.dispatcherinbox.test/androidx.test.runner.AndroidJUnitRunner | tee instrumentation.txt
+            adb shell am instrument -w -e class ru.bruce.dispatcherinbox.CaptureIntegrationTest,ru.bruce.dispatcherinbox.MigrationTest ru.bruce.dispatcherinbox.test/androidx.test.runner.AndroidJUnitRunner | tee instrumentation.txt
+            grep -q 'OK (' instrumentation.txt
+            adb shell am force-stop ru.bruce.dispatcherinbox
+            adb shell am instrument -w -e class ru.bruce.dispatcherinbox.ProcessRestartTest ru.bruce.dispatcherinbox.test/androidx.test.runner.AndroidJUnitRunner | tee restart.txt
             adb logcat -d > logcat.txt
             adb pull /sdcard/Android/data/ru.bruce.dispatcherinbox/files/catching-evidence ./evidence || true
-            grep -q 'OK (' instrumentation.txt
+            grep -q 'OK (' restart.txt
             adb install -r apk/release/app-release.apk
             adb shell am start -n ru.bruce.dispatcherinbox/.MainActivity
             adb shell dumpsys package ru.bruce.dispatcherinbox > installed-package.txt
@@ -118,6 +121,7 @@ jobs:
           name: проверки-на-Android
           path: |
             instrumentation.txt
+            restart.txt
             logcat.txt
             installed-package.txt
             evidence/
