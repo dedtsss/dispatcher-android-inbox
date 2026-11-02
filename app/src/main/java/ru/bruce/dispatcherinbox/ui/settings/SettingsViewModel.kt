@@ -17,11 +17,8 @@ class SettingsViewModel(private val repository: SettingsRepository) : ViewModel(
         AppSettings(),
     )
 
-    fun setApiBaseUrl(value: String) = viewModelScope.launch { repository.setApiBaseUrl(value) }
-    fun setBearerToken(value: String) = viewModelScope.launch { repository.setBearerToken(value) }
     fun setAutoSync(value: Boolean) = viewModelScope.launch { repository.setAutoSync(value) }
     fun setWifiOnly(value: Boolean) = viewModelScope.launch { repository.setWifiOnly(value) }
-    fun setDeleteAfterSync(value: Boolean) = viewModelScope.launch { repository.setDeleteAfterSync(value) }
     fun setDefaultOpenMode(value: String) = viewModelScope.launch { repository.setDefaultOpenMode(value) }
     fun setCloseAfterSave(value: Boolean) = viewModelScope.launch { repository.setCloseAfterSave(value) }
 

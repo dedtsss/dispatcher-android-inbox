@@ -7,9 +7,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -18,7 +16,6 @@ import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import ru.bruce.dispatcherinbox.data.AppSettings
 import ru.bruce.dispatcherinbox.data.AttachmentDraft
 import ru.bruce.dispatcherinbox.data.InboxRepository
 import ru.bruce.dispatcherinbox.data.InboxSource
@@ -52,7 +49,6 @@ class CaptureViewModel(
     private val closeEvents = Channel<Unit>(Channel.BUFFERED)
     private var closeAfterSave = false
     private var lastSavedId: String? = null
-    private var amplitudeJob: Job? = null
 
     val close = closeEvents.receiveAsFlow()
 
@@ -154,7 +150,6 @@ class CaptureViewModel(
 
     fun stopRecordingAndSave() {
         if (!localState.value.isRecording) return
-        stopAmplitudeUpdates()
         localState.value = localState.value.copy(
             isRecording = false,
             recordingAmplitude = 0f,
@@ -203,7 +198,6 @@ class CaptureViewModel(
     }
 
     private fun showError(message: String) {
-        stopAmplitudeUpdates()
         localState.value = localState.value.copy(
             isBusy = false,
             isRecording = false,
@@ -213,13 +207,7 @@ class CaptureViewModel(
         )
     }
 
-    private fun stopAmplitudeUpdates() {
-        amplitudeJob?.cancel()
-        amplitudeJob = null
-    }
-
     override fun onCleared() {
-        stopAmplitudeUpdates()
         if (localState.value.isRecording) recorder.cancel()
         super.onCleared()
     }

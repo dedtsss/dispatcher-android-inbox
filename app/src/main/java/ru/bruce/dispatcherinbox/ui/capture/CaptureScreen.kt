@@ -3,10 +3,7 @@ package ru.bruce.dispatcherinbox.ui.capture
 import android.Manifest
 import android.content.pm.PackageManager
 import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
@@ -56,9 +53,6 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.CornerRadius
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
@@ -96,12 +90,6 @@ fun CaptureScreen(
     val filePicker = rememberLauncherForActivityResult(ActivityResultContracts.GetMultipleContents()) { uris ->
         viewModel.addAttachments(uris)
     }
-    val photoPicker = rememberLauncherForActivityResult(
-        ActivityResultContracts.PickMultipleVisualMedia(maxItems = 20),
-    ) { uris ->
-        viewModel.addAttachments(uris)
-    }
-
     fun startWithPermission() {
         if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) ==
             PackageManager.PERMISSION_GRANTED
@@ -155,16 +143,16 @@ fun CaptureScreen(
                 modifier = Modifier.weight(1f)) { Text("Файл") }
         }
         if (textExpanded || state.text.isNotEmpty()) {
-        OutlinedTextField(
-            value = state.text,
-            onValueChange = viewModel::setText,
-            enabled = !state.isBusy,
-            label = { Text("Что записать?") },
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(if (compact) 112.dp else 180.dp),
-            shape = RoundedCornerShape(20.dp),
-        )
+            OutlinedTextField(
+                value = state.text,
+                onValueChange = viewModel::setText,
+                enabled = !state.isBusy,
+                label = { Text("Что записать?") },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(if (compact) 112.dp else 180.dp),
+                shape = RoundedCornerShape(20.dp),
+            )
 
         }
 
@@ -187,6 +175,7 @@ fun CaptureScreen(
             Text(message, modifier = Modifier.padding(vertical = 8.dp),
                 color = if (state.isError) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant)
         }
+        if (textExpanded || state.attachments.isNotEmpty()) {
         Spacer(Modifier.height(10.dp))
         Button(
             onClick = viewModel::save,
@@ -196,6 +185,8 @@ fun CaptureScreen(
             contentPadding = ButtonDefaults.ContentPadding,
         ) {
             Text(if (state.isBusy) "Сохраняем…" else "Сохранить")
+        }
+
         }
 
         if (!compact) RecentJournal(

@@ -25,11 +25,7 @@ class DriveRestClient(
         client.newCall(builder.header("Authorization", "Bearer $token").build()).execute().use { response ->
             val text = response.body?.string().orEmpty()
             if (!response.isSuccessful) {
-                val reason = runCatching {
-                    JsonParser.parseString(text).asJsonObject.getAsJsonObject("error")
-                        .getAsJsonArray("errors")[0].asJsonObject["reason"].asString
-                }.getOrDefault("")
-                throw DriveHttpException(response.code, reason)
+                throw failure(response.code, text)
             }
             return if (text.isBlank()) JsonObject() else JsonParser.parseString(text).asJsonObject
         }
@@ -62,7 +58,7 @@ class DriveRestClient(
             .header("X-Upload-Content-Length", content.contentLength().toString())
             .post(metadataBody(id, name, parent).apply { addProperty("mimeType", mime) }.toString().toRequestBody(JSON)).build()
         val location = client.newCall(request).execute().use {
-            if (!it.isSuccessful) throw DriveHttpException(it.code, "")
+            if (!it.isSuccessful) throw failure(it.code, it.body?.string().orEmpty())
             it.header("Location") ?: throw IOException("Drive не вернул адрес загрузки")
         }
         // URL сессии выдаёт только Drive; токен не отправляется сторонним узлам.
@@ -73,6 +69,14 @@ class DriveRestClient(
     private fun metadataBody(id: String, name: String, parent: String) = JsonObject().apply {
         addProperty("id", id); addProperty("name", name)
         add("parents", com.google.gson.JsonArray().apply { add(parent) })
+    }
+
+    private fun failure(code: Int, text: String): DriveHttpException {
+        val reason = runCatching {
+            JsonParser.parseString(text).asJsonObject.getAsJsonObject("error")
+                .getAsJsonArray("errors")[0].asJsonObject["reason"].asString
+        }.getOrDefault("")
+        return DriveHttpException(code, reason)
     }
 
     companion object { private val JSON = "application/json; charset=utf-8".toMediaType() }

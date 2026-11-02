@@ -50,12 +50,16 @@ class CaptureIntegrationTest {
     @Test fun captureOfflineAndSystemEntries() = runBlocking {
         // CI отключает Wi-Fi и мобильные данные до запуска этого теста.
         assertNull((context.getSystemService(android.net.ConnectivityManager::class.java)).activeNetwork)
-        container.settingsRepository.setAutoSync(false)
+        container.settingsRepository.setAutoSync(true)
         container.settingsRepository.setDefaultOpenMode("text")
         val text = "  Offline оригинал\n"
         val savedText = container.inboxRepository.save(text, emptyList())
         assertEquals(text, container.dao.getById(savedText.id)!!.item.text)
         assertEquals(InboxStatus.QUEUED, container.dao.getById(savedText.id)!!.item.status)
+        Thread.sleep(1500)
+        val work = androidx.work.WorkManager.getInstance(context).getWorkInfosForUniqueWork("dispatcher-inbox-sync").get()
+        assertTrue(work.any { it.state == androidx.work.WorkInfo.State.ENQUEUED })
+        assertTrue(work.none { it.state == androidx.work.WorkInfo.State.RUNNING })
 
         ActivityScenario.launch(MainActivity::class.java).use {
             assertTrue(device.wait(Until.hasObject(By.text("Голос")), 10000))
@@ -123,6 +127,33 @@ class CaptureIntegrationTest {
             assertTrue(device.wait(Until.hasObject(By.text("Google Drive")), 5000))
             screenshot("05-settings")
         }
+
+        device.executeShellCommand("svc wifi enable")
+        repeat(200) {
+            if (container.dao.getById(savedText.id)!!.item.status != InboxStatus.ERROR ||
+                container.dao.getById(savedText.id)!!.item.lastError == "Проверка восстановления") Thread.sleep(100)
+        }
+        assertTrue(container.dao.getById(savedText.id)!!.item.lastError!!.contains("Подключите Google Drive"))
+        container.settingsRepository.setAutoSync(false)
+        val pending = container.dao.getPending()
+        val originals = pending.flatMap { it.attachments }.associate { it.localPath to File(it.localPath).readBytes() }
+        val gateway = object : ru.bruce.dispatcherinbox.network.DispatcherGateway {
+            var fail = true
+            override suspend fun upload(item: InboxItemWithAttachments, settings: AppSettings): ru.bruce.dispatcherinbox.network.UploadResult =
+                if (fail) ru.bruce.dispatcherinbox.network.UploadResult.Failure("Проверка сетевого сбоя", true)
+                else ru.bruce.dispatcherinbox.network.UploadResult.Success("confirmed-${item.item.id}")
+        }
+        val drainer = ru.bruce.dispatcherinbox.sync.QueueDrainer(container.dao, ru.bruce.dispatcherinbox.sync.SyncItemProcessor(gateway))
+        assertTrue(drainer.drain(AppSettings()))
+        pending.forEach {
+            val after = container.dao.getById(it.item.id)!!.item
+            assertEquals(InboxStatus.ERROR, after.status)
+            assertEquals(it.item.retryCount + 1, after.retryCount)
+        }
+        gateway.fail = false
+        assertFalse(drainer.drain(AppSettings()))
+        pending.forEach { assertEquals(InboxStatus.SYNCED, container.dao.getById(it.item.id)!!.item.status) }
+        originals.forEach { (path, bytes) -> assertArrayEquals(bytes, File(path).readBytes()) }
     }
 
     private suspend fun awaitItem(text: String): InboxItemWithAttachments {

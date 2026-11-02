@@ -7,6 +7,8 @@ import com.google.android.gms.auth.api.identity.ClearTokenRequest
 import com.google.android.gms.auth.api.identity.Identity
 import com.google.android.gms.common.api.Scope
 import kotlinx.coroutines.tasks.await
+import com.google.android.gms.common.api.ApiException
+import java.io.IOException
 import ru.bruce.dispatcherinbox.data.AppSettings
 
 class DriveAuthorization(context: Context) {
@@ -19,7 +21,12 @@ class DriveAuthorization(context: Context) {
 
     suspend fun token(settings: AppSettings): String {
         check(settings.driveAccount.isNotBlank()) { "Подключите Google Drive в настройках. Оригиналы сохранены на телефоне" }
-        val result = client.authorize(request(settings.driveAccount)).await()
+        val result = try { client.authorize(request(settings.driveAccount)).await() }
+        catch (e: ApiException) {
+            if (e.statusCode == 7 || e.statusCode == 15) throw IOException("Нет связи с Google", e)
+            error(if (e.statusCode == 10) "Google OAuth не настроен: зарегистрируйте package + SHA-1 этого APK (код 10)"
+                else "Google Drive требует повторного подключения (код ${e.statusCode})")
+        }
         check(!result.hasResolution()) { "Google Drive требует подтверждения. Подключите его повторно в настройках" }
         return checkNotNull(result.accessToken) { "Google не выдал доступ к Drive. Подключите повторно" }
     }
