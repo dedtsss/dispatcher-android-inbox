@@ -179,7 +179,6 @@ fun CaptureScreen(
             }
         }
 
-        if (state.isRecording) Text("Идёт запись оригинала M4A…", Modifier.padding(vertical = 12.dp))
         state.statusMessage?.let { message ->
             Text(message, modifier = Modifier.padding(vertical = 8.dp),
                 color = if (state.isError) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant)

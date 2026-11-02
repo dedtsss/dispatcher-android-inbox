@@ -51,7 +51,7 @@ jobs:
           mkdir -p release
           cp app/build/outputs/apk/release/app-release.apk release/catching-0.6.0-release.apk
           "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs release/catching-0.6.0-release.apk > release/certificate.txt
-          sha256sum release/catching-0.6.0-release.apk > release/SHA256SUMS
+          sha256sum release/catching-0.6.0-release.apk | sed 's#  release/#  #' > release/SHA256SUMS
           {
             echo 'Приложение: Catching 0.6.0 (versionCode 6)'
             echo 'Android OAuth package: ru.bruce.dispatcherinbox'
