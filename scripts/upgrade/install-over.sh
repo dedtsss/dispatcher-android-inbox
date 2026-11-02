@@ -7,7 +7,7 @@ adb shell svc data disable
 sleep 3
 mkdir -p upgrade-evidence
 runner=ru.bruce.dispatcherinbox.test/androidx.test.runner.AndroidJUnitRunner
-for label in v1 v2 v060; do
+for label in v1 v2 v060 v061; do
   adb uninstall ru.bruce.dispatcherinbox >/dev/null 2>&1 || true
   adb uninstall ru.bruce.dispatcherinbox.test >/dev/null 2>&1 || true
   adb install history-apk/"$label"/app-debug.apk
@@ -32,7 +32,7 @@ for label in v1 v2 v060; do
   adb install -r apk/androidTest/debug/app-debug-androidTest.apk
   duration=false; drive=false
   [ "$label" != v2 ] || duration=true
-  [ "$label" != v060 ] || drive=true
+  if [ "$label" = v060 ] || [ "$label" = v061 ]; then drive=true; fi
   timeout 120s adb shell am instrument -w -e class ru.bruce.dispatcherinbox.MigrationTest -e historicalDuration "$duration" -e historicalDrive "$drive" "$runner" | tee "upgrade-evidence/$label-verify.txt"
   grep -q 'OK (1 test)' "upgrade-evidence/$label-verify.txt"
   adb shell am start -W -n ru.bruce.dispatcherinbox/.MainActivity
