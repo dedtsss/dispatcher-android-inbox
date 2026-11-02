@@ -11,6 +11,14 @@ for entry in v1:2c42012c9ba655f74699bf9b7928b5f75c20b006 v2:7f7dbc7c9bc39d69a65b
   rm -rf "$dir/app/src/androidTest"
   mkdir -p "$dir/app/src/androidTest/java/ru/bruce/dispatcherinbox"
   cp scripts/upgrade/HistoricalSeedTest.kt "$dir/app/src/androidTest/java/ru/bruce/dispatcherinbox/"
+  # В ранней v1 ещё не было зависимостей инструментальных тестов.
+  cat >> "$dir/app/build.gradle.kts" <<'GRADLE'
+
+dependencies {
+    androidTestImplementation("androidx.test:runner:1.6.2")
+    androidTestImplementation("androidx.test.ext:junit:1.2.1")
+}
+GRADLE
   (cd "$dir" && ./gradlew assembleDebug assembleRelease assembleDebugAndroidTest --console=plain)
   mkdir -p "history-apk/$label"
   cp "$dir/app/build/outputs/apk/debug/app-debug.apk" "history-apk/$label/"

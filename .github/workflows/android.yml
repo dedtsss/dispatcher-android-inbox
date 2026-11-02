@@ -32,6 +32,8 @@ jobs:
           java-version: "17"
       - name: Подготовить Gradle
         uses: gradle/actions/setup-gradle@v4
+        with:
+          cache-read-only: false
       - name: Подготовить Android SDK
         uses: android-actions/setup-android@v4
       - name: Установить Android SDK 36
