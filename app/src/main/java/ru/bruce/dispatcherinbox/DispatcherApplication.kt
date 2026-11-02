@@ -31,7 +31,7 @@ class AppContainer(application: Application) {
         application,
         InboxDatabase::class.java,
         "dispatcher-inbox.db",
-    ).addMigrations(InboxDatabase.MIGRATION_1_2).build()
+    ).addMigrations(InboxDatabase.MIGRATION_1_3, InboxDatabase.MIGRATION_2_3).build()
 
     val dao: InboxDao = database.inboxDao()
     val settingsRepository = SettingsRepository(application)

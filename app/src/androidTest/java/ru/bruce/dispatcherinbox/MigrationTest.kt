@@ -1,40 +1,42 @@
 package ru.bruce.dispatcherinbox
 
-import android.database.sqlite.SQLiteDatabase
 import androidx.room.Room
-import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.*
 import org.junit.Test
-import org.junit.runner.RunWith
 import ru.bruce.dispatcherinbox.data.InboxDatabase
-import ru.bruce.dispatcherinbox.drive.DriveCheckpoint
+import java.io.File
+import java.security.MessageDigest
 
-@RunWith(AndroidJUnit4::class)
 class MigrationTest {
-    @Test fun upgradeKeepsOriginalsAndQueue() = runBlocking<Unit> {
+    @Test fun actualInstallOverPreservesData() = runBlocking<Unit> {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
-        val name = "migration-test.db"
-        context.deleteDatabase(name)
-        val file = context.getDatabasePath(name).apply { parentFile!!.mkdirs() }
-        SQLiteDatabase.openOrCreateDatabase(file, null).use { db ->
-            db.execSQL("CREATE TABLE inbox_items (id TEXT NOT NULL PRIMARY KEY, type TEXT NOT NULL, text TEXT, createdAt INTEGER NOT NULL, updatedAt INTEGER NOT NULL, status TEXT NOT NULL, source TEXT NOT NULL, retryCount INTEGER NOT NULL, lastError TEXT, remoteId TEXT)")
-            db.execSQL("CREATE TABLE inbox_attachments (id TEXT NOT NULL PRIMARY KEY, itemId TEXT NOT NULL, localPath TEXT NOT NULL, mimeType TEXT, originalName TEXT, sizeBytes INTEGER NOT NULL, checksum TEXT, FOREIGN KEY(itemId) REFERENCES inbox_items(id) ON UPDATE NO ACTION ON DELETE CASCADE)")
-            db.execSQL("CREATE INDEX index_inbox_attachments_itemId ON inbox_attachments(itemId)")
-            db.execSQL("INSERT INTO inbox_items VALUES ('old', 'text', '  исходник  ', 1, 1, 'queued', 'manual', 2, NULL, NULL)")
-            db.execSQL("INSERT INTO inbox_attachments VALUES ('file', 'old', '/original/path', 'audio/mp4', 'voice.m4a', 42, 'checksum')")
-            db.version = 1
-        }
-        val room = Room.databaseBuilder(context, InboxDatabase::class.java, name).addMigrations(InboxDatabase.MIGRATION_1_2).build()
+        val args = InstrumentationRegistry.getArguments()
+        val room = Room.databaseBuilder(context, InboxDatabase::class.java, "dispatcher-inbox.db")
+            .addMigrations(InboxDatabase.MIGRATION_1_3, InboxDatabase.MIGRATION_2_3).build()
         try {
-            val saved = room.inboxDao().getById("old")!!
-            assertEquals("  исходник  ", saved.item.text)
-            assertEquals(2, saved.item.retryCount)
-            assertEquals("/original/path", saved.attachments.single().localPath)
-            assertEquals("checksum", saved.attachments.single().checksum)
-            room.inboxDao().putDriveId(DriveCheckpoint("account/item", "drive-id"))
-            assertEquals("drive-id", room.inboxDao().driveId("account/item"))
-        } finally { room.close(); context.deleteDatabase(name) }
+            for (status in listOf("queued", "error", "synced")) {
+                val saved = room.inboxDao().getById("upgrade-$status")!!
+                assertEquals("  исходник\nЮникод  ", saved.item.text)
+                assertEquals(status, saved.item.status)
+                assertEquals(123L, saved.item.createdAt)
+                assertEquals(456L, saved.item.updatedAt)
+                assertEquals("assistant", saved.item.source)
+                assertEquals(2, saved.item.retryCount)
+                assertEquals("ошибка", saved.item.lastError)
+                assertEquals("remote-old", saved.item.remoteId)
+                assertEquals(if (args.getString("historicalDuration") == "true") 12345L else null, saved.item.durationMillis)
+                val attachment = saved.attachments.single()
+                assertEquals("исходник.m4a", attachment.originalName)
+                assertEquals("audio/mp4", attachment.mimeType)
+                assertEquals(5L, attachment.sizeBytes)
+                val bytes = File(attachment.localPath).readBytes()
+                assertArrayEquals(byteArrayOf(0, 1, -1, 10, 42), bytes)
+                assertEquals(MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(it) }, attachment.checksum)
+            }
+            if (args.getString("historicalDrive") == "true") assertEquals("reserved-drive-id", room.inboxDao().driveId("upgrade/account"))
+            assertEquals(3, room.openHelper.writableDatabase.version)
+        } finally { room.close() }
     }
 }
