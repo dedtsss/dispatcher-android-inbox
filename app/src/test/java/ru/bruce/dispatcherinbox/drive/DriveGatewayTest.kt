@@ -31,6 +31,7 @@ class DriveGatewayTest {
         val bytes = mutableMapOf<String, ByteArray>()
         var nextId = 0
         var failUpload = false
+        var disconnectUpload = false
         var rejectCode = 0
         var uploads = 0
         val ids = Ids()
@@ -70,6 +71,7 @@ class DriveGatewayTest {
                         bytes[id] = content
                         uploads++
                         // Моделируем подтверждённую сервером запись, ответ о которой клиент потерял.
+                        if (disconnectUpload) { disconnectUpload = false; return MockResponse().setSocketPolicy(okhttp3.mockwebserver.SocketPolicy.DISCONNECT_AFTER_REQUEST) }
                         if (failUpload) { failUpload = false; return MockResponse().setResponseCode(503) }
                         return ok(metadata.toString())
                     }
@@ -77,7 +79,7 @@ class DriveGatewayTest {
                 }
             }
             server.start()
-            gateway = DriveGateway(ids, { "test-token" }, { DriveRestClient(it, base = server.url("/").toString()) })
+            gateway = DriveGateway(ids, { "test-token" }, { DriveRestClient(it, client = okhttp3.OkHttpClient.Builder().retryOnConnectionFailure(false).build(), base = server.url("/").toString()) })
         }
         override fun close() = server.shutdown()
         private fun ok(body: String) = MockResponse().setBody(body)
@@ -100,6 +102,17 @@ class DriveGatewayTest {
             val reserved = s.ids.saved.toMap()
             assertTrue(s.gateway.upload(entry(), settings) is UploadResult.Success)
             assertEquals(reserved, s.ids.saved)
+            assertEquals(1, s.uploads)
+        }
+    }
+
+    @Test fun `разрыв TCP после записи восстанавливается новым экземпляром destination`() = runTest {
+        Server().use { s ->
+            s.disconnectUpload = true
+            val result = s.gateway.upload(entry(), settings)
+            assertTrue(result is UploadResult.Failure && result.retryable)
+            val restarted = DriveGateway(s.ids, { "test-token" }, { DriveRestClient(it, base = s.server.url("/").toString()) })
+            assertTrue(restarted.upload(entry(), settings) is UploadResult.Success)
             assertEquals(1, s.uploads)
         }
     }
