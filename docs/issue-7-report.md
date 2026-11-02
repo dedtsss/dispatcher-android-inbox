@@ -1,3 +1,5 @@
+> Исторический отчёт 0.6.0. Его зелёный CI не доказывал миграцию исторической установки. См. [rework и проверенное исправление 0.6.1](issue-7-migration-rework.md).
+
 # Catching: результат Issue #7
 
 [PR #8](https://github.com/dedtsss/dispatcher-android-inbox/pull/8) реализует первый мобильный этап [канонического плана](https://github.com/dedtsss/agent-dispatch/blob/main/docs/memory/catching-agentic-inbox-2026-11-02.md). Исполняемый код проверен на коммите `87b95fe7a172d56702e48410febd7c7a2c601765`; последующий коммит с этим отчётом и снимками экрана не меняет приложение.
