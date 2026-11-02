@@ -1,0 +1,6 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <application>
+        <provider android:name="ru.bruce.dispatcherinbox.TestOriginalProvider"
+            android:authorities="ru.bruce.dispatcherinbox.test.originals" android:exported="true" />
+    </application>
+</manifest>

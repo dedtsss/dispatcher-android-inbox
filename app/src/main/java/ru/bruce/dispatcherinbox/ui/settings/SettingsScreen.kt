@@ -56,34 +56,25 @@ fun SettingsScreen(
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Text("Настройки", style = MaterialTheme.typography.headlineSmall)
-        Text(
-            "В debug-сборке пустой URL включает локальную заглушку. Для реальной отправки нужны URL и token.",
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            style = MaterialTheme.typography.bodySmall,
-        )
-        OutlinedTextField(
-            value = settings.apiBaseUrl,
-            onValueChange = viewModel::setApiBaseUrl,
-            label = { Text("Dispatcher API base URL") },
-            placeholder = { Text("https://dispatcher.example/") },
-            singleLine = true,
-            modifier = Modifier.fillMaxWidth(),
-        )
-        OutlinedTextField(
-            value = settings.bearerToken,
-            onValueChange = viewModel::setBearerToken,
-            label = { Text("Device / Bearer token") },
-            visualTransformation = PasswordVisualTransformation(),
-            singleLine = true,
-            modifier = Modifier.fillMaxWidth(),
-        )
+        val context = LocalContext.current
+        Surface(
+            shape = RoundedCornerShape(24.dp),
+            color = MaterialTheme.colorScheme.surfaceVariant,
+        ) {
+            Column(Modifier.fillMaxWidth().padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text("Google Drive", style = MaterialTheme.typography.titleLarge)
+                Text(settings.driveAccount.ifBlank { "Аккаунт не выбран" })
+                Text(settings.driveStatus, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text("Оригиналы → Мой диск / Catching / Inbox. Без сети всё сохраняется на телефоне.")
+                Button(onClick = {
+                    context.startActivity(android.content.Intent(context, ru.bruce.dispatcherinbox.drive.DriveConnectActivity::class.java))
+                }, modifier = Modifier.fillMaxWidth()) {
+                    Text(if (settings.driveAccount.isBlank()) "Подключить Google Drive" else "Подключить повторно")
+                }
+            }
+        }
         SettingSwitch("Автосинхронизация", settings.autoSync, viewModel::setAutoSync)
         SettingSwitch("Только по Wi-Fi", settings.wifiOnly, viewModel::setWifiOnly)
-        SettingSwitch(
-            label = "Удалять внутренние копии после отправки",
-            checked = settings.deleteAfterSync,
-            onCheckedChange = viewModel::setDeleteAfterSync,
-        )
         SettingSwitch("Закрывать после сохранения", settings.closeAfterSave, viewModel::setCloseAfterSave)
         HorizontalDivider()
         Text("Открывать по умолчанию", style = MaterialTheme.typography.titleMedium)
@@ -103,7 +94,7 @@ fun SettingsScreen(
         Text("Системный ассистент", style = MaterialTheme.typography.titleMedium)
         AssistantStatus()
         Text(
-            "На HyperOS экран обычно называется «Помощник и голосовой ввод». Выберите «Диспетчер Bruce» как цифрового помощника. Голосовой ввод менять не нужно: приложение не распознает речь.",
+            "На HyperOS экран обычно называется «Помощник и голосовой ввод». Выберите «Catching» как цифрового помощника. Голосовой ввод менять не нужно: приложение не распознает речь.",
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             style = MaterialTheme.typography.bodySmall,
         )
@@ -119,7 +110,7 @@ fun SettingsScreen(
         HorizontalDivider()
         Text("Быстрый доступ", style = MaterialTheme.typography.titleMedium)
         Text(
-            "Добавьте плитку «Диспетчер Bruce» в шторку. На защищенном экране телефон сначала попросит разблокировку, затем сразу откроет запись.",
+            "Добавьте плитку «Catching» в шторку. На защищенном экране телефон сначала попросит разблокировку, затем сразу откроет запись.",
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             style = MaterialTheme.typography.bodySmall,
         )
@@ -167,8 +158,8 @@ private fun AssistantStatus() {
         modifier = Modifier.fillMaxWidth(),
     ) {
         Text(
-            if (active) "Системный статус: Диспетчер Bruce активен"
-            else "Системный статус: Диспетчер Bruce пока не активен",
+            if (active) "Системный статус: Catching активен"
+            else "Системный статус: Catching пока не активен",
             modifier = Modifier.padding(horizontal = 12.dp, vertical = 9.dp),
             style = MaterialTheme.typography.bodyMedium,
         )

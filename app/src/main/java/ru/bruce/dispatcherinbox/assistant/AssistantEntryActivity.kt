@@ -58,12 +58,12 @@ private fun AssistantCaptureSheet(
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
     BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
-        val sheetHeight = (maxHeight * 0.74f).coerceIn(440.dp, 680.dp)
+        val sheetHeight = (maxHeight * 0.58f).coerceIn(360.dp, 520.dp).coerceAtMost(maxHeight)
         ModalBottomSheet(
             onDismissRequest = onDismiss,
             sheetState = sheetState,
-            containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.85f),
-            scrimColor = Color.Transparent,
+            containerColor = MaterialTheme.colorScheme.surface,
+            scrimColor = Color.Black.copy(alpha = 0.32f),
             dragHandle = { BottomSheetDefaults.DragHandle() },
         ) {
             Box(

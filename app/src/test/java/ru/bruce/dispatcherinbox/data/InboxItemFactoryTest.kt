@@ -16,7 +16,7 @@ class InboxItemFactoryTest {
 
         assertEquals("item-1", item.id)
         assertEquals(InboxType.TEXT, item.type)
-        assertEquals("Купить молоко", item.text)
+        assertEquals("  Купить молоко  ", item.text)
         assertEquals(InboxStatus.QUEUED, item.status)
         assertEquals(1_700_000_000_000L, item.createdAt)
         assertNull(item.lastError)

@@ -39,9 +39,6 @@ class SyncWorker(
                         lastError = null,
                         remoteId = result.remoteId,
                     )
-                    if (settings.deleteAfterSync) {
-                        container.attachmentStore.deleteAttachments(entry.attachments)
-                    }
                 }
                 is UploadResult.Failure -> {
                     container.dao.updateStatus(
@@ -56,7 +53,7 @@ class SyncWorker(
             }
         }
 
-        return if (shouldRetry && runAttemptCount < 4) Result.retry() else Result.success()
+        return if (shouldRetry) Result.retry() else Result.success()
     }
 
     companion object {

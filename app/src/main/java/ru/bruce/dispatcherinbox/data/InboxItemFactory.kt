@@ -12,7 +12,7 @@ class InboxItemFactory(
         source: String,
         status: String = InboxStatus.QUEUED,
     ): InboxItemEntity {
-        val normalizedText = text?.trim()?.takeIf { it.isNotEmpty() }
+        val normalizedText = text?.takeIf { it.isNotBlank() }
         require(normalizedText != null || attachments.isNotEmpty()) {
             "Нужно добавить текст, голос или файл"
         }

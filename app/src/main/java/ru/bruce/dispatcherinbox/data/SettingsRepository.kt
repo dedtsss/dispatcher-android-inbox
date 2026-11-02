@@ -11,6 +11,8 @@ import kotlinx.coroutines.flow.map
 private val Context.settingsDataStore by preferencesDataStore(name = "dispatcher_settings")
 
 data class AppSettings(
+    val driveAccount: String = "",
+    val driveStatus: String = "Google Drive не подключён",
     val apiBaseUrl: String = "",
     val bearerToken: String = "",
     val autoSync: Boolean = true,
@@ -22,6 +24,8 @@ data class AppSettings(
 
 class SettingsRepository(private val context: Context) {
     private object Keys {
+        val driveAccount = stringPreferencesKey("drive_account")
+        val driveStatus = stringPreferencesKey("drive_status")
         val apiBaseUrl = stringPreferencesKey("api_base_url")
         val bearerToken = stringPreferencesKey("bearer_token")
         val autoSync = booleanPreferencesKey("auto_sync")
@@ -33,6 +37,8 @@ class SettingsRepository(private val context: Context) {
 
     val settings: Flow<AppSettings> = context.settingsDataStore.data.map { values ->
         AppSettings(
+            driveAccount = values[Keys.driveAccount].orEmpty(),
+            driveStatus = values[Keys.driveStatus] ?: "Google Drive не подключён",
             apiBaseUrl = values[Keys.apiBaseUrl].orEmpty(),
             bearerToken = values[Keys.bearerToken].orEmpty(),
             autoSync = values[Keys.autoSync] ?: true,
@@ -42,6 +48,9 @@ class SettingsRepository(private val context: Context) {
             closeAfterSave = values[Keys.closeAfterSave] ?: false,
         )
     }
+
+    suspend fun setDriveAccount(value: String) = update(Keys.driveAccount, value)
+    suspend fun setDriveStatus(value: String) = update(Keys.driveStatus, value)
 
     suspend fun setApiBaseUrl(value: String) = update(Keys.apiBaseUrl, value.trim())
     suspend fun setBearerToken(value: String) = update(Keys.bearerToken, value.trim())

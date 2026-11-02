@@ -8,6 +8,12 @@ import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface InboxDao {
+    @Query("SELECT remoteId FROM drive_checkpoints WHERE `key` = :key")
+    suspend fun driveId(key: String): String?
+
+    @Insert(onConflict = androidx.room.OnConflictStrategy.REPLACE)
+    suspend fun putDriveId(checkpoint: ru.bruce.dispatcherinbox.drive.DriveCheckpoint)
+
     @Insert
     suspend fun insertItem(item: InboxItemEntity)
 

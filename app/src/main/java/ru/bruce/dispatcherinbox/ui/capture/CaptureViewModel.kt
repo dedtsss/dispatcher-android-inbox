@@ -145,7 +145,7 @@ class CaptureViewModel(
                 statusMessage = "Идет запись…",
                 isError = false,
             )
-            startAmplitudeUpdates()
+
         }.onFailure {
             audioFeedback.playErrorSound()
             showError("Не удалось начать запись")
@@ -211,20 +211,6 @@ class CaptureViewModel(
             statusMessage = message,
             isError = true,
         )
-    }
-
-    private fun startAmplitudeUpdates() {
-        amplitudeJob?.cancel()
-        amplitudeJob = viewModelScope.launch {
-            var smoothed = 0f
-            while (localState.value.isRecording) {
-                val raw = recorder.currentAmplitude().coerceIn(0, 32_767) / 32_767f
-                val visibleLevel = kotlin.math.sqrt(raw)
-                smoothed = smoothed * 0.55f + visibleLevel * 0.45f
-                localState.value = localState.value.copy(recordingAmplitude = smoothed)
-                delay(80)
-            }
-        }
     }
 
     private fun stopAmplitudeUpdates() {

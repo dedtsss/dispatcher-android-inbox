@@ -7,7 +7,13 @@ import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.graphics.Brush
+import ru.bruce.dispatcherinbox.R
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -79,6 +85,7 @@ fun CaptureScreen(
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val context = LocalContext.current
+    var textExpanded by rememberSaveable { mutableStateOf(false) }
     var requestedAutoStart by rememberSaveable { mutableStateOf(false) }
 
     val audioPermission = rememberLauncherForActivityResult(
@@ -121,18 +128,33 @@ fun CaptureScreen(
             .verticalScroll(rememberScrollState())
             .padding(horizontal = if (compact) 18.dp else 20.dp, vertical = 14.dp),
     ) {
-        Text(
-            if (compact) "Диспетчер Bruce" else "Быстрая запись",
-            style = MaterialTheme.typography.headlineSmall,
-        )
-        Text(
-            if (compact) "Продиктуйте или добавьте файл"
-            else "Текст, голос или файл — остальное сделает Диспетчер",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        Spacer(Modifier.height(if (compact) 10.dp else 16.dp))
-
+        Box(
+            modifier = Modifier.fillMaxWidth().height(if (compact) 76.dp else 120.dp)
+                .background(Brush.radialGradient(listOf(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f), Color.Transparent))),
+            contentAlignment = Alignment.Center,
+        ) {
+            Image(painterResource(R.drawable.catching_logo_wide), contentDescription = "Catching", modifier = Modifier.fillMaxWidth(0.7f))
+        }
+        Text("Сначала на телефоне · затем в Google Drive", style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Spacer(Modifier.height(16.dp))
+        Button(
+            onClick = { if (state.isRecording) viewModel.stopRecordingAndSave() else startWithPermission() },
+            enabled = !state.isBusy,
+            modifier = Modifier.fillMaxWidth().height(if (compact) 72.dp else 96.dp),
+            shape = RoundedCornerShape(28.dp),
+        ) {
+            Icon(if (state.isRecording) Icons.Default.Stop else Icons.Default.Mic, null, Modifier.size(32.dp))
+            Spacer(Modifier.width(12.dp))
+            Text(if (state.isRecording) "Остановить и сохранить" else "Голос", style = MaterialTheme.typography.titleLarge)
+        }
+        Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            OutlinedButton(onClick = { textExpanded = !textExpanded }, enabled = !state.isBusy && !state.isRecording,
+                modifier = Modifier.weight(1f)) { Text("Текст") }
+            OutlinedButton(onClick = { filePicker.launch("*/*") }, enabled = !state.isBusy && !state.isRecording,
+                modifier = Modifier.weight(1f)) { Text("Файл") }
+        }
+        if (textExpanded || state.text.isNotEmpty()) {
         OutlinedTextField(
             value = state.text,
             onValueChange = viewModel::setText,
@@ -143,6 +165,8 @@ fun CaptureScreen(
                 .height(if (compact) 112.dp else 180.dp),
             shape = RoundedCornerShape(20.dp),
         )
+
+        }
 
         if (state.attachments.isNotEmpty()) {
             Text(
@@ -158,56 +182,10 @@ fun CaptureScreen(
             }
         }
 
-        Spacer(Modifier.height(10.dp))
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(4.dp),
-        ) {
-            IconButton(
-                enabled = !state.isBusy && !state.isRecording,
-                onClick = { filePicker.launch("*/*") },
-            ) { Icon(Icons.Default.AttachFile, contentDescription = "Выбрать файлы") }
-            IconButton(
-                enabled = !state.isBusy && !state.isRecording,
-                onClick = {
-                    photoPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
-                },
-            ) { Icon(Icons.Default.Image, contentDescription = "Выбрать фотографии") }
-            IconButton(
-                enabled = !state.isBusy,
-                onClick = {
-                    if (state.isRecording) viewModel.stopRecordingAndSave() else startWithPermission()
-                },
-            ) {
-                Icon(
-                    if (state.isRecording) Icons.Default.Stop else Icons.Default.Mic,
-                    contentDescription = if (state.isRecording) "Остановить запись" else "Записать голос",
-                    tint = if (state.isRecording) MaterialTheme.colorScheme.error
-                    else MaterialTheme.colorScheme.primary,
-                )
-            }
-            if (state.isRecording) {
-                RecordingLevelIndicator(
-                    amplitude = state.recordingAmplitude,
-                    modifier = Modifier.weight(1f),
-                )
-            } else state.statusMessage?.let { message ->
-                Surface(
-                    color = if (state.isError) MaterialTheme.colorScheme.errorContainer
-                    else MaterialTheme.colorScheme.secondaryContainer,
-                    shape = RoundedCornerShape(12.dp),
-                    modifier = Modifier.weight(1f),
-                ) {
-                    Text(
-                        message,
-                        modifier = Modifier.padding(horizontal = 11.dp, vertical = 8.dp),
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis,
-                        style = MaterialTheme.typography.bodySmall,
-                    )
-                }
-            }
+        if (state.isRecording) Text("Идёт запись оригинала M4A…", Modifier.padding(vertical = 12.dp))
+        state.statusMessage?.let { message ->
+            Text(message, modifier = Modifier.padding(vertical = 8.dp),
+                color = if (state.isError) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant)
         }
         Spacer(Modifier.height(10.dp))
         Button(
@@ -220,66 +198,11 @@ fun CaptureScreen(
             Text(if (state.isBusy) "Сохраняем…" else "Сохранить")
         }
 
-        RecentJournal(
+        if (!compact) RecentJournal(
             items = state.recentItems.take(if (compact) 2 else 4),
             modifier = Modifier.padding(top = 16.dp),
         )
         Spacer(Modifier.height(if (compact) 18.dp else 8.dp))
-    }
-}
-
-@Composable
-private fun RecordingLevelIndicator(
-    amplitude: Float,
-    modifier: Modifier = Modifier,
-) {
-    val animatedAmplitude by animateFloatAsState(
-        targetValue = amplitude.coerceIn(0f, 1f),
-        animationSpec = tween(durationMillis = 80),
-        label = "recordingAmplitude",
-    )
-    val indicatorColor = MaterialTheme.colorScheme.onErrorContainer
-
-    Surface(
-        color = MaterialTheme.colorScheme.errorContainer,
-        shape = RoundedCornerShape(12.dp),
-        modifier = modifier,
-    ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 11.dp, vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(9.dp),
-        ) {
-            Canvas(
-                modifier = Modifier
-                    .width(54.dp)
-                    .height(22.dp),
-            ) {
-                val factors = floatArrayOf(0.48f, 0.72f, 0.9f, 1f, 0.84f, 0.66f, 0.44f)
-                val barWidth = size.width / 15f
-                val gap = barWidth
-                factors.forEachIndexed { index, factor ->
-                    val heightFraction = (0.16f + animatedAmplitude * factor * 0.84f)
-                        .coerceIn(0.16f, 1f)
-                    val barHeight = size.height * heightFraction
-                    drawRoundRect(
-                        color = indicatorColor,
-                        topLeft = Offset(
-                            x = index * (barWidth + gap),
-                            y = (size.height - barHeight) / 2f,
-                        ),
-                        size = Size(barWidth, barHeight),
-                        cornerRadius = CornerRadius(barWidth / 2f, barWidth / 2f),
-                    )
-                }
-            }
-            Text(
-                "Запись идет",
-                style = MaterialTheme.typography.bodySmall,
-                color = indicatorColor,
-                maxLines = 1,
-            )
-        }
     }
 }
 

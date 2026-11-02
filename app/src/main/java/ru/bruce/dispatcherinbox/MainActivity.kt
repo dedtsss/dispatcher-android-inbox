@@ -52,7 +52,7 @@ open class MainActivity : ComponentActivity() {
     private val roleRequest = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
         val message = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             val roles = getSystemService(RoleManager::class.java)
-            if (roles.isRoleHeld(RoleManager.ROLE_ASSISTANT)) "Диспетчер Bruce выбран ассистентом"
+            if (roles.isRoleHeld(RoleManager.ROLE_ASSISTANT)) "Catching выбран ассистентом"
             else "Роль ассистента не назначена"
         } else {
             "Проверьте выбор ассистента в настройках Android"
@@ -87,7 +87,7 @@ open class MainActivity : ComponentActivity() {
             when {
                 !roleManager.isRoleAvailable(RoleManager.ROLE_ASSISTANT) -> openAssistantSettings()
                 roleManager.isRoleHeld(RoleManager.ROLE_ASSISTANT) ->
-                    Toast.makeText(this, "Диспетчер Bruce уже выбран ассистентом", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(this, "Catching уже выбран ассистентом", Toast.LENGTH_SHORT).show()
                 else -> roleRequest.launch(roleManager.createRequestRoleIntent(RoleManager.ROLE_ASSISTANT))
             }
         } else {
@@ -115,7 +115,7 @@ open class MainActivity : ComponentActivity() {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
             Toast.makeText(
                 this,
-                "Откройте шторку, нажмите «Изменить» и добавьте плитку «Диспетчер Bruce»",
+                "Откройте шторку, нажмите «Изменить» и добавьте плитку «Catching»",
                 Toast.LENGTH_LONG,
             ).show()
             return
