@@ -31,7 +31,7 @@ for label in v1 v2 v060 v061; do
   adb install -r apk/release/app-release.apk
   adb install -r apk/androidTest/debug/app-debug-androidTest.apk
   duration=false; drive=false
-  [ "$label" != v2 ] || duration=true
+  if [ "$label" = v2 ] || [ "$label" = v061 ]; then duration=true; fi
   if [ "$label" = v060 ] || [ "$label" = v061 ]; then drive=true; fi
   timeout 120s adb shell am instrument -w -e class ru.bruce.dispatcherinbox.MigrationTest -e historicalDuration "$duration" -e historicalDrive "$drive" "$runner" | tee "upgrade-evidence/$label-verify.txt"
   grep -q 'OK (1 test)' "upgrade-evidence/$label-verify.txt"
