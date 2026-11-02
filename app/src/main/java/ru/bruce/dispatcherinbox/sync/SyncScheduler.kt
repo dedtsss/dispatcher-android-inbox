@@ -35,7 +35,7 @@ class SyncScheduler(
             .build()
         WorkManager.getInstance(context).enqueueUniqueWork(
             UNIQUE_WORK_NAME,
-            ExistingWorkPolicy.APPEND_OR_REPLACE,
+            if (manual) ExistingWorkPolicy.REPLACE else ExistingWorkPolicy.APPEND_OR_REPLACE,
             request,
         )
     }

@@ -76,7 +76,7 @@ class DriveGateway(
             val parent = if (parts.size > 1) folder("event/${item.item.id}", prefix, inbox, false) else inbox
             val uploaded = parts.mapIndexed { index, part ->
                 val id = reserved("item/${item.item.id}/${part.key}")
-                fun confirmed(): Boolean {
+                suspend fun confirmed(): Boolean {
                     val metadata = drive.metadata(id) ?: return false
                     check(metadata["trashed"]?.asBoolean != true) { "Оригинал Drive находится в корзине. Восстановите его" }
                     check(metadata["size"]?.asLong == part.body.contentLength() && metadata["md5Checksum"]?.asString == part.md5) {

@@ -3,6 +3,7 @@ package ru.bruce.dispatcherinbox.drive
 import com.google.gson.JsonObject
 import com.google.gson.JsonParser
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.launch
 import okhttp3.mockwebserver.Dispatcher
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
@@ -33,7 +34,8 @@ class DriveGatewayTest {
         var failUpload = false
         var disconnectUpload = false
         var rejectCode = 0
-        var uploads = 0
+        var stallUpload = false
+        @Volatile var uploads = 0
         val ids = Ids()
         val gateway: DriveGateway
         init {
@@ -71,6 +73,7 @@ class DriveGatewayTest {
                         bytes[id] = content
                         uploads++
                         // Моделируем подтверждённую сервером запись, ответ о которой клиент потерял.
+                        if (stallUpload) { stallUpload = false; return MockResponse().setSocketPolicy(okhttp3.mockwebserver.SocketPolicy.NO_RESPONSE) }
                         if (disconnectUpload) { disconnectUpload = false; return MockResponse().setSocketPolicy(okhttp3.mockwebserver.SocketPolicy.DISCONNECT_AFTER_REQUEST) }
                         if (failUpload) { failUpload = false; return MockResponse().setResponseCode(503) }
                         return ok(metadata.toString())
@@ -113,6 +116,24 @@ class DriveGatewayTest {
             assertTrue(result is UploadResult.Failure && result.retryable)
             val restarted = DriveGateway(s.ids, { "test-token" }, { DriveRestClient(it, base = s.server.url("/").toString()) })
             assertTrue(restarted.upload(entry(), settings) is UploadResult.Success)
+            assertEquals(1, s.uploads)
+        }
+    }
+
+    @Test fun `отмена worker прерывает HTTP и оставляет ID для безопасного повтора`() = runTest {
+        Server().use { s ->
+            s.stallUpload = true
+            val task = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Default).launch {
+                s.gateway.upload(entry(), settings)
+                fail("Отменённая загрузка не должна возвращать успех")
+            }
+            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                repeat(100) { if (s.uploads == 0) Thread.sleep(50) }
+            }
+            assertEquals(1, s.uploads)
+            task.cancel()
+            task.join()
+            assertTrue(s.gateway.upload(entry(), settings) is UploadResult.Success)
             assertEquals(1, s.uploads)
         }
     }
