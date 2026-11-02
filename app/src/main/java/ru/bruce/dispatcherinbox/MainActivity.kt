@@ -224,7 +224,7 @@ private fun InboxApp(
             }
             composable("queue") {
                 val queueViewModel: QueueViewModel = viewModel(
-                    factory = QueueViewModel.Factory(container.inboxRepository),
+                    factory = QueueViewModel.Factory(container.inboxRepository, container.settingsRepository),
                 )
                 QueueScreen(queueViewModel)
             }

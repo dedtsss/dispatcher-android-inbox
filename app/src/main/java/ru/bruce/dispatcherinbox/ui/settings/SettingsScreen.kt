@@ -63,6 +63,11 @@ fun SettingsScreen(
                 Text("Google Drive", style = MaterialTheme.typography.titleLarge)
                 Text(settings.driveAccount.ifBlank { "Аккаунт не выбран" })
                 Text(settings.driveStatus, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                var diagnosticsExpanded by remember { mutableStateOf(false) }
+                androidx.compose.material3.TextButton(onClick = { diagnosticsExpanded = !diagnosticsExpanded }) { Text("Диагностика подключения") }
+                if (diagnosticsExpanded) androidx.compose.foundation.text.selection.SelectionContainer {
+                    Text(settings.driveDiagnostics.ifBlank { "Диагностика появится после попытки подключения" }, style = MaterialTheme.typography.bodySmall)
+                }
                 Text("Оригиналы → Мой диск / Catching / Inbox. Без сети всё сохраняется на телефоне.")
                 Button(onClick = {
                     context.startActivity(android.content.Intent(context, ru.bruce.dispatcherinbox.drive.DriveConnectActivity::class.java))
@@ -90,6 +95,14 @@ fun SettingsScreen(
         }
         HorizontalDivider()
         Text("Системный ассистент", style = MaterialTheme.typography.titleMedium)
+        Text("При вызове ассистента", style = MaterialTheme.typography.bodyLarge)
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            for ((mode, label) in listOf("text" to "Текст", "voice" to "Голос")) {
+                FilterChip(selected = settings.assistantOpenMode == mode, onClick = { viewModel.setAssistantOpenMode(mode) }, label = { Text(label) })
+            }
+        }
+        SettingSwitch("Сразу начинать запись", settings.autoStartAssistantRecording, viewModel::setAutoStartAssistantRecording,
+            enabled = settings.assistantOpenMode == "voice")
         AssistantStatus()
         Text(
             "На HyperOS экран обычно называется «Помощник и голосовой ввод». Выберите «Catching» как цифрового помощника. Голосовой ввод менять не нужно: приложение не распознает речь.",
@@ -123,6 +136,7 @@ private fun SettingSwitch(
     label: String,
     checked: Boolean,
     onCheckedChange: (Boolean) -> Unit,
+    enabled: Boolean = true,
 ) {
     Row(
         modifier = Modifier.fillMaxWidth(),
@@ -130,7 +144,7 @@ private fun SettingSwitch(
         horizontalArrangement = Arrangement.SpaceBetween,
     ) {
         Text(label, modifier = Modifier.weight(1f).padding(end = 12.dp))
-        Switch(checked = checked, onCheckedChange = onCheckedChange)
+        Switch(checked = checked, onCheckedChange = onCheckedChange, enabled = enabled)
     }
 }
 

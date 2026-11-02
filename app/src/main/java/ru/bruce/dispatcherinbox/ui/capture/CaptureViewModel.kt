@@ -29,6 +29,10 @@ data class CaptureUiState(
     val text: String = "",
     val attachments: List<AttachmentDraft> = emptyList(),
     val isRecording: Boolean = false,
+    val recordingSeconds: Long = 0,
+    val driveConnected: Boolean = false,
+    val assistantOpenMode: String? = null,
+    val autoStartAssistantRecording: Boolean = false,
     val recordingAmplitude: Float = 0f,
     val isBusy: Boolean = false,
     val statusMessage: String? = null,
@@ -47,6 +51,7 @@ class CaptureViewModel(
     private val audioFeedback = AudioFeedbackManager()
     private val localState = MutableStateFlow(CaptureUiState())
     private val closeEvents = Channel<Unit>(Channel.BUFFERED)
+    private var amplitudeJob: kotlinx.coroutines.Job? = null
     private var closeAfterSave = false
     private var lastSavedId: String? = null
 
@@ -59,7 +64,8 @@ class CaptureViewModel(
     ) { local, settings, items ->
         closeAfterSave = settings.closeAfterSave
         val saved = lastSavedId?.let { id -> items.firstOrNull { it.item.id == id } }
-        val syncMessage = when (saved?.item?.status) {
+        val waitingForDrive = settings.driveAccount.isBlank() && saved != null && saved.item.status != InboxStatus.SYNCED
+        val syncMessage = if (waitingForDrive) "На телефоне · Ждёт Drive" else when (saved?.item?.status) {
             InboxStatus.SYNCING -> "Отправляется"
             InboxStatus.SYNCED -> "Отправлено"
             InboxStatus.ERROR -> saved.item.lastError ?: "Ошибка отправки"
@@ -68,7 +74,10 @@ class CaptureViewModel(
         }
         local.copy(
             statusMessage = syncMessage,
-            isError = saved?.item?.status == InboxStatus.ERROR || local.isError,
+            isError = (!waitingForDrive && saved?.item?.status == InboxStatus.ERROR) || local.isError,
+            driveConnected = settings.driveAccount.isNotBlank(),
+            assistantOpenMode = settings.assistantOpenMode,
+            autoStartAssistantRecording = settings.autoStartAssistantRecording,
             defaultOpenMode = settings.defaultOpenMode,
             recentItems = items.take(4),
         )
@@ -138,10 +147,24 @@ class CaptureViewModel(
             localState.value = localState.value.copy(
                 isRecording = true,
                 recordingAmplitude = 0f,
-                statusMessage = "Идет запись…",
+                recordingSeconds = 0,
+                statusMessage = "Идёт запись",
                 isError = false,
             )
 
+            val started = android.os.SystemClock.elapsedRealtime()
+            amplitudeJob?.cancel()
+            amplitudeJob = viewModelScope.launch {
+                while (localState.value.isRecording) {
+                    val raw = recorder.currentAmplitude().coerceIn(0, 32767)
+                    val level = (kotlin.math.ln(1.0 + raw) / kotlin.math.ln(32768.0)).toFloat()
+                    localState.value = localState.value.copy(
+                        recordingAmplitude = localState.value.recordingAmplitude * 0.65f + level * 0.35f,
+                        recordingSeconds = (android.os.SystemClock.elapsedRealtime() - started) / 1000,
+                    )
+                    kotlinx.coroutines.delay(100)
+                }
+            }
         }.onFailure {
             audioFeedback.playErrorSound()
             showError("Не удалось начать запись")
@@ -150,6 +173,7 @@ class CaptureViewModel(
 
     fun stopRecordingAndSave() {
         if (!localState.value.isRecording) return
+        amplitudeJob?.cancel()
         localState.value = localState.value.copy(
             isRecording = false,
             recordingAmplitude = 0f,
@@ -198,6 +222,7 @@ class CaptureViewModel(
     }
 
     private fun showError(message: String) {
+        amplitudeJob?.cancel()
         localState.value = localState.value.copy(
             isBusy = false,
             isRecording = false,
@@ -208,6 +233,7 @@ class CaptureViewModel(
     }
 
     override fun onCleared() {
+        amplitudeJob?.cancel()
         if (localState.value.isRecording) recorder.cancel()
         super.onCleared()
     }

@@ -12,6 +12,8 @@ import ru.bruce.dispatcherinbox.network.UploadResult
 
 class QueueDrainer(private val dao: InboxDao, private val processor: SyncItemProcessor) {
     suspend fun drain(settings: AppSettings): Boolean = lock.withLock {
+        // Подключение destination не является неудачной попыткой отправки локальной записи.
+        if (settings.driveAccount.isBlank()) return@withLock false
         dao.recoverInterruptedSyncs("Предыдущая синхронизация была прервана")
         var shouldRetry = false
         dao.getPending().forEach { entry ->

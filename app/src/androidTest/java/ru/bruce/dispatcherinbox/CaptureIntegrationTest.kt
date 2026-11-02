@@ -96,12 +96,14 @@ class CaptureIntegrationTest {
         shared.attachments.forEach { assertArrayEquals(byteArrayOf(0, 1, -1, 10, 42), File(it.localPath).readBytes()) }
         Thread.sleep(1500)
 
+        container.settingsRepository.setAssistantOpenMode("voice")
+        container.settingsRepository.setAutoStartAssistantRecording(true)
         val before = container.dao.getPending().size
         context.startActivity(Intent(Intent.ACTION_ASSIST).setPackage(context.packageName).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-        assertTrue(device.wait(Until.hasObject(By.text("Остановить и сохранить")), 10000))
+        assertTrue(device.wait(Until.hasObject(By.desc("Остановить и сохранить")), 10000))
         screenshot("02-assistant-recording")
         Thread.sleep(1000)
-        device.findObject(By.text("Остановить и сохранить")).click()
+        device.findObject(By.desc("Остановить и сохранить")).click()
         repeat(100) { if (container.dao.getPending().size <= before) Thread.sleep(100) }
         assertTrue(container.dao.getPending().size > before)
         val assistant = container.dao.getPending().last()
@@ -124,18 +126,19 @@ class CaptureIntegrationTest {
         ActivityScenario.launch(MainActivity::class.java).use {
             assertTrue(device.wait(Until.hasObject(By.text("Очередь")), 10000))
             device.findObject(By.text("Очередь")).click()
+            assertTrue(device.wait(Until.hasObject(By.text("На телефоне · Ждёт Drive")), 5000))
+            assertFalse(device.hasObject(By.text("Повторить")))
             screenshot("04-offline-queue")
             device.findObject(By.text("Настройки")).click()
             assertTrue(device.wait(Until.hasObject(By.text("Google Drive")), 5000))
             screenshot("05-settings")
         }
 
+        val beforeNetwork = container.dao.getById(savedText.id)!!.item
         device.executeShellCommand("svc wifi enable")
-        repeat(200) {
-            if (container.dao.getById(savedText.id)!!.item.status != InboxStatus.ERROR ||
-                container.dao.getById(savedText.id)!!.item.lastError == "Проверка восстановления") Thread.sleep(100)
-        }
-        assertTrue(container.dao.getById(savedText.id)!!.item.lastError!!.contains("Подключите Google Drive"))
+        Thread.sleep(1500)
+        // Без destination восстановление сети не меняет сохранённую очередь и retryCount.
+        assertEquals(beforeNetwork, container.dao.getById(savedText.id)!!.item)
         container.settingsRepository.setAutoSync(false)
         val pending = container.dao.getPending()
         val originals = pending.flatMap { it.attachments }.associate { it.localPath to File(it.localPath).readBytes() }
@@ -146,14 +149,17 @@ class CaptureIntegrationTest {
                 else ru.bruce.dispatcherinbox.network.UploadResult.Success("confirmed-${item.item.id}")
         }
         val drainer = ru.bruce.dispatcherinbox.sync.QueueDrainer(container.dao, ru.bruce.dispatcherinbox.sync.SyncItemProcessor(gateway))
-        assertTrue(drainer.drain(AppSettings()))
+        val beforeConnection = container.dao.getPending().map { it.item }
+        assertFalse(drainer.drain(AppSettings()))
+        assertEquals(beforeConnection, container.dao.getPending().map { it.item })
+        assertTrue(drainer.drain(AppSettings(driveAccount = "test@example.test")))
         pending.forEach {
             val after = container.dao.getById(it.item.id)!!.item
             assertEquals(InboxStatus.ERROR, after.status)
             assertEquals(it.item.retryCount + 1, after.retryCount)
         }
         gateway.fail = false
-        assertFalse(drainer.drain(AppSettings()))
+        assertFalse(drainer.drain(AppSettings(driveAccount = "test@example.test")))
         pending.forEach { assertEquals(InboxStatus.SYNCED, container.dao.getById(it.item.id)!!.item.status) }
         originals.forEach { (path, bytes) -> assertArrayEquals(bytes, File(path).readBytes()) }
         container.inboxRepository.save("process-restart-marker", listOf(container.inboxRepository.stage(original)))

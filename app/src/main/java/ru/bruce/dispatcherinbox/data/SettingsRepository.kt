@@ -12,6 +12,9 @@ private val Context.settingsDataStore by preferencesDataStore(name = "dispatcher
 
 data class AppSettings(
     val driveAccount: String = "",
+    val driveDiagnostics: String = "",
+    val assistantOpenMode: String = "text",
+    val autoStartAssistantRecording: Boolean = false,
     val driveStatus: String = "Google Drive не подключён",
     val autoSync: Boolean = true,
     val wifiOnly: Boolean = false,
@@ -22,6 +25,9 @@ data class AppSettings(
 class SettingsRepository(private val context: Context) {
     private object Keys {
         val driveAccount = stringPreferencesKey("drive_account")
+        val driveDiagnostics = stringPreferencesKey("drive_diagnostics")
+        val assistantOpenMode = stringPreferencesKey("assistant_open_mode")
+        val autoStartAssistantRecording = booleanPreferencesKey("auto_start_assistant_recording")
         val driveStatus = stringPreferencesKey("drive_status")
         val autoSync = booleanPreferencesKey("auto_sync")
         val wifiOnly = booleanPreferencesKey("wifi_only")
@@ -31,6 +37,9 @@ class SettingsRepository(private val context: Context) {
 
     val settings: Flow<AppSettings> = context.settingsDataStore.data.map { values ->
         AppSettings(
+            driveDiagnostics = values[Keys.driveDiagnostics].orEmpty(),
+            assistantOpenMode = values[Keys.assistantOpenMode] ?: "text",
+            autoStartAssistantRecording = values[Keys.autoStartAssistantRecording] ?: false,
             driveAccount = values[Keys.driveAccount].orEmpty(),
             driveStatus = values[Keys.driveStatus] ?: "Google Drive не подключён",
             autoSync = values[Keys.autoSync] ?: true,
@@ -39,6 +48,10 @@ class SettingsRepository(private val context: Context) {
             closeAfterSave = values[Keys.closeAfterSave] ?: false,
         )
     }
+
+    suspend fun setDriveDiagnostics(value: String) = update(Keys.driveDiagnostics, value)
+    suspend fun setAssistantOpenMode(value: String) = update(Keys.assistantOpenMode, if (value == "voice") "voice" else "text")
+    suspend fun setAutoStartAssistantRecording(value: Boolean) = update(Keys.autoStartAssistantRecording, value)
 
     suspend fun setDriveAccount(value: String) = update(Keys.driveAccount, value)
     suspend fun setDriveStatus(value: String) = update(Keys.driveStatus, value)

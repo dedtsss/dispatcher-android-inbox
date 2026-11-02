@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.material3.BottomSheetDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -61,28 +62,21 @@ private fun AssistantCaptureSheet(
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
-    BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
-        val sheetHeight = (maxHeight * 0.58f).coerceIn(360.dp, 520.dp).coerceAtMost(maxHeight)
-        ModalBottomSheet(
-            onDismissRequest = onDismiss,
-            sheetState = sheetState,
-            containerColor = MaterialTheme.colorScheme.surface,
-            scrimColor = Color.Black.copy(alpha = 0.32f),
-            dragHandle = { BottomSheetDefaults.DragHandle() },
-        ) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(sheetHeight)
-                    .navigationBarsPadding(),
-            ) {
-                CaptureScreen(
-                    viewModel = viewModel,
-                    forceVoiceStart = true,
-                    onClose = onDismiss,
-                    compact = true,
-                )
-            }
-        }
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+        sheetMaxWidth = 400.dp,
+        modifier = Modifier.padding(horizontal = 18.dp, vertical = 12.dp),
+        containerColor = MaterialTheme.colorScheme.surface,
+        scrimColor = Color.Black.copy(alpha = 0.32f),
+        dragHandle = null,
+        shape = androidx.compose.foundation.shape.RoundedCornerShape(32.dp),
+    ) {
+        CaptureScreen(
+            viewModel = viewModel,
+            forceVoiceStart = false,
+            onClose = onDismiss,
+            compact = true,
+        )
     }
 }

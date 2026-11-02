@@ -17,6 +17,8 @@ class SettingsViewModel(private val repository: SettingsRepository) : ViewModel(
         AppSettings(),
     )
 
+    fun setAssistantOpenMode(value: String) = viewModelScope.launch { repository.setAssistantOpenMode(value) }
+    fun setAutoStartAssistantRecording(value: Boolean) = viewModelScope.launch { repository.setAutoStartAssistantRecording(value) }
     fun setAutoSync(value: Boolean) = viewModelScope.launch { repository.setAutoSync(value) }
     fun setWifiOnly(value: Boolean) = viewModelScope.launch { repository.setWifiOnly(value) }
     fun setDefaultOpenMode(value: String) = viewModelScope.launch { repository.setDefaultOpenMode(value) }

@@ -69,11 +69,11 @@ jobs:
       - name: Проверить подпись и сохранить параметры OAuth
         run: |
           mkdir -p release
-          cp app/build/outputs/apk/release/app-release.apk release/catching-0.6.1-release.apk
-          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs release/catching-0.6.1-release.apk > release/certificate.txt
-          sha256sum release/catching-0.6.1-release.apk | sed 's#  release/#  #' > release/SHA256SUMS
+          cp app/build/outputs/apk/release/app-release.apk release/catching-0.6.2-release.apk
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs release/catching-0.6.2-release.apk > release/certificate.txt
+          sha256sum release/catching-0.6.2-release.apk | sed 's#  release/#  #' > release/SHA256SUMS
           {
-            echo 'Приложение: Catching 0.6.1 (versionCode 7)'
+            echo 'Приложение: Catching 0.6.2 (versionCode 8)'
             echo 'Android OAuth package: ru.bruce.dispatcherinbox'
             echo 'Scope: https://www.googleapis.com/auth/drive.file'
             echo 'Нужен Android OAuth client с SHA-1 ниже и включённый Google Drive API.'
@@ -83,7 +83,7 @@ jobs:
       - name: Опубликовать точный release APK
         uses: actions/upload-artifact@v4
         with:
-          name: catching-0.6.1-release
+          name: catching-0.6.2-release
           path: release/
           if-no-files-found: error
           retention-days: 30
@@ -145,7 +145,7 @@ jobs:
             adb shell pm grant ru.bruce.dispatcherinbox android.permission.RECORD_AUDIO
             adb shell svc wifi disable
             adb shell svc data disable
-            timeout 240s adb shell am instrument -w -e class ru.bruce.dispatcherinbox.CaptureIntegrationTest ru.bruce.dispatcherinbox.test/androidx.test.runner.AndroidJUnitRunner | tee instrumentation.txt
+            timeout 240s adb shell am instrument -w -e class ru.bruce.dispatcherinbox.CaptureIntegrationTest,ru.bruce.dispatcherinbox.AssistantIntegrationTest ru.bruce.dispatcherinbox.test/androidx.test.runner.AndroidJUnitRunner | tee instrumentation.txt
             adb logcat -d > logcat.txt
             adb shell dumpsys activity exit-info ru.bruce.dispatcherinbox > exit-info.txt
             adb shell dumpsys activity processes > processes.txt
