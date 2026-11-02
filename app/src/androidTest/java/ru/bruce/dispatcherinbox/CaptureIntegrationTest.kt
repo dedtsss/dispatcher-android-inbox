@@ -68,9 +68,12 @@ class CaptureIntegrationTest {
             val input = device.wait(Until.findObject(By.clazz("android.widget.EditText")), 5000)
             assertNotNull(input)
             val uiText = "Текст через интерфейс без сети"
+            input.click()
             input.text = uiText
+            device.waitForIdle()
             device.pressBack()
             screenshot("01-text-expanded")
+            if (!device.hasObject(By.text("Сохранить"))) device.swipe(device.displayWidth - 8, device.displayHeight * 3 / 4, device.displayWidth - 8, device.displayHeight / 3, 30)
             device.findObject(By.text("Сохранить")).click()
             val captured = awaitItem(uiText)
             assertEquals(InboxStatus.QUEUED, captured.item.status)
