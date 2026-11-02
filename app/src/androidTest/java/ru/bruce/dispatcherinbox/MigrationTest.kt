@@ -13,7 +13,7 @@ import ru.bruce.dispatcherinbox.drive.DriveCheckpoint
 
 @RunWith(AndroidJUnit4::class)
 class MigrationTest {
-    @Test fun upgradeKeepsOriginalsAndQueue() = runBlocking {
+    @Test fun upgradeKeepsOriginalsAndQueue() = runBlocking<Unit> {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val name = "migration-test.db"
         context.deleteDatabase(name)

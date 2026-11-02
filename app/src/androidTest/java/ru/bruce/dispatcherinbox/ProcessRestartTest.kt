@@ -13,7 +13,7 @@ import java.security.MessageDigest
 
 @RunWith(AndroidJUnit4::class)
 class ProcessRestartTest {
-    @Test fun originalsAndQueueSurviveForceStop() = runBlocking {
+    @Test fun originalsAndQueueSurviveForceStop() = runBlocking<Unit> {
         val app = InstrumentationRegistry.getInstrumentation().targetContext.applicationContext as DispatcherApplication
         val container = app.container
         val all = container.dao.observeAll().first()

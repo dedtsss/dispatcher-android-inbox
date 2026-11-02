@@ -33,7 +33,7 @@ class CaptureIntegrationTest {
     private val device = UiDevice.getInstance(instrumentation)
     private val original = Uri.parse("content://ru.bruce.dispatcherinbox.test.originals/original")
 
-    @Test fun captureOfflineAndSystemEntries() = runBlocking {
+    @Test fun captureOfflineAndSystemEntries() = runBlocking<Unit> {
         // CI отключает Wi-Fi и мобильные данные до запуска этого теста.
         assertNull((context.getSystemService(android.net.ConnectivityManager::class.java)).activeNetwork)
         container.settingsRepository.setAutoSync(true)
