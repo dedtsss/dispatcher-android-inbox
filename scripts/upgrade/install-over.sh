@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 # Только выделенный эмулятор: очистка между независимыми историческими сценариями.
+# Исторический debug содержит фиктивный отправитель; блокируем его до первого старта.
+adb shell svc wifi disable
+adb shell svc data disable
+sleep 3
 mkdir -p upgrade-evidence
 runner=ru.bruce.dispatcherinbox.test/androidx.test.runner.AndroidJUnitRunner
 for label in v1 v2 v060; do
