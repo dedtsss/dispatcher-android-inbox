@@ -3,13 +3,16 @@ package ru.bruce.dispatcherinbox
 import androidx.room.Room
 import androidx.test.platform.app.InstrumentationRegistry
 import org.junit.Test
+import kotlinx.coroutines.runBlocking
+import ru.bruce.dispatcherinbox.data.SettingsRepository
 import ru.bruce.dispatcherinbox.data.InboxDatabase
 import java.io.File
 import java.security.MessageDigest
 
 class HistoricalSeedTest {
-    @Test fun seedWithHistoricalRoom() {
+    @Test fun seedWithHistoricalRoom() = runBlocking<Unit> {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
+        SettingsRepository(context).setAutoSync(false)
         val room = Room.databaseBuilder(context, InboxDatabase::class.java, "dispatcher-inbox.db").build()
         val db = room.openHelper.writableDatabase
         val original = File(context.filesDir, "upgrade-original.m4a")
