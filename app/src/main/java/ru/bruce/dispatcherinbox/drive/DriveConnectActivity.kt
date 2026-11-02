@@ -17,9 +17,11 @@ import ru.bruce.dispatcherinbox.DispatcherApplication
 import ru.bruce.dispatcherinbox.sync.SyncScheduler
 
 class DriveConnectActivity : ComponentActivity() {
+    private var awaitingResolution = false
     private val container get() = (application as DispatcherApplication).container
     private val auth by lazy { DriveAuthorization(this) }
     private val resolution = registerForActivityResult(ActivityResultContracts.StartIntentSenderForResult()) { result ->
+        awaitingResolution = false
         lifecycleScope.launch {
             try {
                 if (result.resultCode != RESULT_OK) {
@@ -35,12 +37,14 @@ class DriveConnectActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        if (savedInstanceState != null) return
+        awaitingResolution = savedInstanceState?.getBoolean("awaiting_resolution") ?: false
+        if (awaitingResolution) return
         lifecycleScope.launch {
             try {
                 val settings = container.settingsRepository.settings.first()
                 val result = auth.client.authorize(auth.request(settings.driveAccount)).await()
                 if (result.hasResolution()) {
+                    awaitingResolution = true
                     resolution.launch(IntentSenderRequest.Builder(checkNotNull(result.pendingIntent)).build())
                 } else {
                     connected(result)
@@ -49,6 +53,11 @@ class DriveConnectActivity : ComponentActivity() {
             } catch (e: CancellationException) { throw e }
             catch (e: Exception) { failed(e); finish() }
         }
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        outState.putBoolean("awaiting_resolution", awaitingResolution)
+        super.onSaveInstanceState(outState)
     }
 
     private suspend fun connected(result: AuthorizationResult) {

@@ -73,11 +73,12 @@ jobs:
         with:
           name: проверка-на-устройстве
           path: |
+            app/build/outputs/apk/release/*.apk
             app/build/outputs/apk/debug/*.apk
             app/build/outputs/apk/androidTest/debug/*.apk
           retention-days: 1
   device:
-    name: Offline capture, Share и assistant на Android
+    name: Локальное сохранение, Share и системный ассистент на Android
     needs: build
     runs-on: ubuntu-latest
     steps:
@@ -104,8 +105,12 @@ jobs:
             adb shell svc wifi disable
             adb shell svc data disable
             adb shell am instrument -w ru.bruce.dispatcherinbox.test/androidx.test.runner.AndroidJUnitRunner | tee instrumentation.txt
+            adb logcat -d > logcat.txt
+            adb pull /sdcard/Android/data/ru.bruce.dispatcherinbox/files/catching-evidence ./evidence || true
             grep -q 'OK (' instrumentation.txt
-            adb pull /sdcard/Android/data/ru.bruce.dispatcherinbox/files/catching-evidence ./evidence
+            adb install -r apk/release/app-release.apk
+            adb shell am start -n ru.bruce.dispatcherinbox/.MainActivity
+            adb shell dumpsys package ru.bruce.dispatcherinbox > installed-package.txt
       - name: Опубликовать проверки и снимки экрана
         if: always()
         uses: actions/upload-artifact@v4
@@ -113,5 +118,7 @@ jobs:
           name: проверки-на-Android
           path: |
             instrumentation.txt
+            logcat.txt
+            installed-package.txt
             evidence/
           retention-days: 3

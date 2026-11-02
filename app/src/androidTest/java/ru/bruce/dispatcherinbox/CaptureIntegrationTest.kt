@@ -70,11 +70,12 @@ class CaptureIntegrationTest {
             Thread.sleep(1200)
             recorder.stop()
             assertTrue(file.length() > 0)
+            val voiceBytes = file.readBytes()
             val voice = container.inboxRepository.save(null, listOf(container.inboxRepository.voiceDraft(file)), InboxSource.ASSISTANT)
             val stored = container.dao.getById(voice.id)!!
             assertEquals(InboxType.VOICE, stored.item.type)
             assertEquals(InboxStatus.QUEUED, stored.item.status)
-            assertTrue(File(stored.attachments.single().localPath).length() > 0)
+            assertArrayEquals(voiceBytes, File(stored.attachments.single().localPath).readBytes())
         }
         val attachment = container.inboxRepository.save(null, listOf(container.inboxRepository.stage(original)))
         val local = container.dao.getById(attachment.id)!!
@@ -87,11 +88,12 @@ class CaptureIntegrationTest {
         awaitItem(marker)
         val multiMarker = "multi-${System.nanoTime()}"
         context.startActivity(Intent(Intent.ACTION_SEND_MULTIPLE).setClassName(context, "ru.bruce.dispatcherinbox.share.ShareReceiverActivity")
-            .setType("*/*").putExtra(Intent.EXTRA_TEXT, multiMarker).putParcelableArrayListExtra(Intent.EXTRA_STREAM, arrayListOf(original))
+            .setType("*/*").putExtra(Intent.EXTRA_TEXT, multiMarker).putParcelableArrayListExtra(Intent.EXTRA_STREAM, arrayListOf(original, original.buildUpon().appendPath("second").build()))
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_GRANT_READ_URI_PERMISSION))
         val shared = awaitItem(multiMarker)
         assertEquals(InboxSource.SHARE, shared.item.source)
-        assertArrayEquals(byteArrayOf(0, 1, -1, 10, 42), File(shared.attachments.single().localPath).readBytes())
+        assertEquals(2, shared.attachments.size)
+        shared.attachments.forEach { assertArrayEquals(byteArrayOf(0, 1, -1, 10, 42), File(it.localPath).readBytes()) }
         Thread.sleep(1500)
 
         val before = container.dao.getPending().size

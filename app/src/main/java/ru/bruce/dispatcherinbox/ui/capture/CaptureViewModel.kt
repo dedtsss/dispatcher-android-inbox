@@ -184,7 +184,7 @@ class CaptureViewModel(
             showError("Введите текст или добавьте файл")
             return
         }
-        localState.value = localState.value.copy(isBusy = true, statusMessage = "Сохраняем…")
+        localState.value = localState.value.copy(attachments = drafts, isBusy = true, statusMessage = "Сохраняем…")
         runCatching { repository.save(text, drafts, source) }
             .onSuccess { item ->
                 lastSavedId = item.id
