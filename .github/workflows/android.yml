@@ -105,6 +105,9 @@ jobs:
             adb shell svc wifi disable
             adb shell svc data disable
             adb shell am instrument -w -e class ru.bruce.dispatcherinbox.CaptureIntegrationTest,ru.bruce.dispatcherinbox.MigrationTest ru.bruce.dispatcherinbox.test/androidx.test.runner.AndroidJUnitRunner | tee instrumentation.txt
+            adb logcat -d > logcat.txt
+            adb shell dumpsys activity exit-info ru.bruce.dispatcherinbox > exit-info.txt
+            adb pull /sdcard/Android/data/ru.bruce.dispatcherinbox/files/catching-evidence ./evidence || true
             grep -q 'OK (' instrumentation.txt
             adb shell am force-stop ru.bruce.dispatcherinbox
             adb shell am instrument -w -e class ru.bruce.dispatcherinbox.ProcessRestartTest ru.bruce.dispatcherinbox.test/androidx.test.runner.AndroidJUnitRunner | tee restart.txt
@@ -123,6 +126,7 @@ jobs:
             instrumentation.txt
             restart.txt
             logcat.txt
+            exit-info.txt
             installed-package.txt
             evidence/
           retention-days: 3
