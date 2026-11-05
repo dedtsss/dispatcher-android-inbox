@@ -7,7 +7,7 @@ adb shell svc data disable
 sleep 3
 mkdir -p upgrade-evidence
 runner=ru.bruce.dispatcherinbox.test/androidx.test.runner.AndroidJUnitRunner
-for label in v1 v2 v060 v061 v062; do
+for label in ${UPGRADE_LABELS:-v1 v2 v060 v061 v062}; do
   adb uninstall ru.bruce.dispatcherinbox >/dev/null 2>&1 || true
   adb uninstall ru.bruce.dispatcherinbox.test >/dev/null 2>&1 || true
   adb install history-apk/"$label"/app-debug.apk

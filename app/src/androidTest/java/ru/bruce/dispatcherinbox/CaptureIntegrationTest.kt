@@ -53,13 +53,23 @@ class CaptureIntegrationTest {
             assertTrue(device.wait(Until.hasObject(By.text("Голос")), 10000))
             screenshot("01-main")
             device.findObject(By.text("Текст")).click()
-            val input = checkNotNull(device.wait(Until.findObject(By.clazz("android.widget.EditText")), 5000)) { "Текстовое поле не открылось" }
-            // UIAutomator на эмуляторе может не передать кириллицу через ACTION_SET_TEXT.
-            // Кириллический оригинал выше уже отдельно проверен на уровне Room.
+            // Поле само получает фокус после появления IME. Общий EditText-селектор
+            // и повторный координатный click могут попасть в узел за пределами viewport.
+            device.waitForIdle()
+            val fields = device.findObjects(By.clazz("android.widget.EditText"))
+            fields.forEach { node -> android.util.Log.i("CatchingInputEvidence",
+                "candidate package=${node.applicationPackage} focused=${node.isFocused} bounds=${node.visibleBounds} text=${node.text}") }
+            inputEvidence("01-before-input")
+            val input = checkNotNull(device.wait(Until.findObject(
+                By.pkg(context.packageName).clazz("android.widget.EditText").focused(true).enabled(true)), 10000)) {
+                "Поле Catching не получило фокус"
+            }
             val uiText = "offline-ui-" + System.nanoTime()
-            input.click()
+            // ACTION_SET_TEXT направляется актуальному узлу приложения; повторный click не нужен.
             input.text = uiText
-            assertTrue("Поле ввода не приняло текст", device.wait(Until.hasObject(By.text(uiText)), 5000))
+            val accepted = device.wait(Until.hasObject(By.pkg(context.packageName).text(uiText)), 5000)
+            inputEvidence("01-after-input")
+            assertTrue("Поле ввода не приняло текст", accepted)
             device.waitForIdle()
             device.pressBack()
             assertTrue("Текст исчез после закрытия клавиатуры", device.wait(Until.hasObject(By.text(uiText)), 5000))
@@ -175,6 +185,11 @@ class CaptureIntegrationTest {
             Thread.sleep(100)
         }
         error("Оригинал не найден: ${text.take(64)}; записано: ${container.dao.getPending().map { it.item.text?.take(64) }}")
+    }
+    private fun inputEvidence(name: String) {
+        screenshot(name)
+        val dir = File(context.getExternalFilesDir(null), "catching-evidence")
+        device.dumpWindowHierarchy(File(dir, "$name.xml"))
     }
     private fun screenshot(name: String) {
         device.waitForIdle()
