@@ -27,6 +27,9 @@ import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.foundation.layout.padding
@@ -50,6 +53,9 @@ open class MainActivity : ComponentActivity() {
     protected open val forceVoiceStart: Boolean = false
     protected open val captureSource: String = InboxSource.MANUAL
 
+    private var requestedRoute by mutableStateOf("capture")
+    private var navigationRequest by mutableStateOf(0)
+
     private val roleRequest = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
         val message = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             val roles = getSystemService(RoleManager::class.java)
@@ -67,10 +73,13 @@ open class MainActivity : ComponentActivity() {
             statusBarStyle = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT),
             navigationBarStyle = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT),
         )
+        requestedRoute = if (intent.getStringExtra("destination") == "settings") "settings" else "capture"
         val container = (application as DispatcherApplication).container
         setContent {
             DispatcherInboxTheme {
                 InboxApp(
+                    requestedRoute = requestedRoute,
+                    navigationRequest = navigationRequest,
                     application = application,
                     container = container,
                     forceVoiceStart = forceVoiceStart,
@@ -83,6 +92,13 @@ open class MainActivity : ComponentActivity() {
                 )
             }
         }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        navigationRequest++
+        requestedRoute = if (intent.getStringExtra("destination") == "settings") "settings" else "capture"
     }
 
     private fun requestAssistantRole() {
@@ -167,6 +183,8 @@ private data class Destination(
 
 @Composable
 private fun InboxApp(
+    requestedRoute: String,
+    navigationRequest: Int,
     application: Application,
     container: AppContainer,
     forceVoiceStart: Boolean,
@@ -178,6 +196,7 @@ private fun InboxApp(
     onRequestQuickSettingsTile: () -> Unit,
 ) {
     val navController = rememberNavController()
+    LaunchedEffect(requestedRoute, navigationRequest) { navController.navigate(requestedRoute) { launchSingleTop = true } }
     val destinations = listOf(
         Destination("capture", "Записать", Icons.Default.EditNote),
         Destination("queue", "Очередь", Icons.Default.Inbox),

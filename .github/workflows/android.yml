@@ -56,7 +56,8 @@ jobs:
           DISPATCHER_SIGNING_STORE_PASSWORD: ${{ secrets.DISPATCHER_SIGNING_STORE_PASSWORD }}
           DISPATCHER_SIGNING_KEY_ALIAS: ${{ secrets.DISPATCHER_SIGNING_KEY_ALIAS }}
           DISPATCHER_SIGNING_KEY_PASSWORD: ${{ secrets.DISPATCHER_SIGNING_KEY_PASSWORD }}
-        run: ./gradlew testReleaseUnitTest lintRelease assembleRelease assembleDebug assembleDebugAndroidTest --stacktrace
+          UPDATE_MANIFEST_URL: ${{ vars.UPDATE_MANIFEST_URL }}
+        run: ./gradlew testReleaseUnitTest lintRelease assembleRelease assembleDebug assembleDebugAndroidTest "-PupdateManifestUrl=$UPDATE_MANIFEST_URL" --stacktrace
       - name: Собрать исторические APK с прежними схемами и постоянной подписью
         env:
           GH_TOKEN: ${{ github.token }}
@@ -75,21 +76,26 @@ jobs:
       - name: Проверить подпись и сохранить параметры OAuth
         run: |
           mkdir -p release
-          cp app/build/outputs/apk/release/app-release.apk release/catching-0.6.2-release.apk
-          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs release/catching-0.6.2-release.apk > release/certificate.txt
-          sha256sum release/catching-0.6.2-release.apk | sed 's#  release/#  #' > release/SHA256SUMS
+          cp app/build/outputs/apk/release/app-release.apk release/catching-0.6.3-release.apk
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs release/catching-0.6.3-release.apk > release/certificate.txt
+          sha256sum release/catching-0.6.3-release.apk | sed 's#  release/#  #' > release/SHA256SUMS
           {
-            echo 'Приложение: Catching 0.6.2 (versionCode 8)'
+            echo 'Приложение: Catching 0.6.3 (versionCode 9)'
             echo 'Android OAuth package: ru.bruce.dispatcherinbox'
             echo 'Scope: https://www.googleapis.com/auth/drive.file'
             echo 'Нужен Android OAuth client с SHA-1 ниже и включённый Google Drive API.'
             cat release/certificate.txt
           } > release/oauth-registration.txt
           cat release/oauth-registration.txt >> "$GITHUB_STEP_SUMMARY"
+      - name: Сформировать метаданные обновления при настроенном URL APK
+        if: vars.UPDATE_APK_URL != ''
+        env:
+          UPDATE_APK_URL: ${{ vars.UPDATE_APK_URL }}
+        run: python3 scripts/update/generate-manifest.py --apk release/catching-0.6.3-release.apk --apk-url "$UPDATE_APK_URL" --build-tools "$ANDROID_HOME/build-tools/35.0.0" --output release/update.json
       - name: Опубликовать точный release APK
         uses: actions/upload-artifact@v4
         with:
-          name: catching-0.6.2-release
+          name: catching-0.6.3-release
           path: release/
           if-no-files-found: error
           retention-days: 30
@@ -151,7 +157,7 @@ jobs:
             adb shell pm grant ru.bruce.dispatcherinbox android.permission.RECORD_AUDIO
             adb shell svc wifi disable
             adb shell svc data disable
-            timeout 240s adb shell am instrument -w -e class ru.bruce.dispatcherinbox.CaptureIntegrationTest,ru.bruce.dispatcherinbox.AssistantIntegrationTest ru.bruce.dispatcherinbox.test/androidx.test.runner.AndroidJUnitRunner | tee instrumentation.txt
+            timeout 240s adb shell am instrument -w -e class ru.bruce.dispatcherinbox.CaptureIntegrationTest,ru.bruce.dispatcherinbox.AssistantIntegrationTest,ru.bruce.dispatcherinbox.UpdateRecoveryTest ru.bruce.dispatcherinbox.test/androidx.test.runner.AndroidJUnitRunner | tee instrumentation.txt
             adb logcat -d > logcat.txt
             adb shell dumpsys activity exit-info ru.bruce.dispatcherinbox > exit-info.txt
             adb shell dumpsys activity processes > processes.txt

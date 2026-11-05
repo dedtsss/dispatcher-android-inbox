@@ -53,6 +53,7 @@ fun SettingsScreen(
             .padding(horizontal = 18.dp, vertical = 12.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
+        ru.bruce.dispatcherinbox.update.UpdateSection()
         Text("Настройки", style = MaterialTheme.typography.headlineSmall)
         val context = LocalContext.current
         Surface(
@@ -121,7 +122,7 @@ fun SettingsScreen(
         HorizontalDivider()
         Text("Быстрый доступ", style = MaterialTheme.typography.titleMedium)
         Text(
-            "Добавьте плитку «Catching» в шторку. На защищенном экране телефон сначала попросит разблокировку, затем сразу откроет запись.",
+            "Добавьте плитку «Catching» в шторку. На защищенном экране телефон сначала попросит разблокировку, затем откроет Catching.",
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             style = MaterialTheme.typography.bodySmall,
         )

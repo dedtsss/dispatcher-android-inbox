@@ -7,6 +7,11 @@ import ru.bruce.dispatcherinbox.drive.AuthorizationDiagnostics
 import ru.bruce.dispatcherinbox.data.InboxStatus
 
 class EntryAndDeliveryTest {
+    @Test fun launcherNeverRecordsRegardlessOfAssistantPreferences() {
+        for (mode in listOf("text", "voice")) for (auto in listOf(false, true)) for (force in listOf(false, true)) {
+            assertFalse(CaptureEntryPolicy.autoRecord(false, mode, auto, force))
+        }
+    }
     @Test fun assistantTextOverridesForcedVoiceAndAutoFlag() {
         assertEquals("text", CaptureEntryPolicy.mode(true, "voice", "text", true))
         assertFalse(CaptureEntryPolicy.autoRecord(true, "text", true, true))

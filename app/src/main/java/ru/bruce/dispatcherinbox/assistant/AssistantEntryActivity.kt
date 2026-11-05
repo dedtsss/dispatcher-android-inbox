@@ -48,6 +48,12 @@ class AssistantEntryActivity : ComponentActivity() {
                         ),
                     ),
                     onDismiss = ::finish,
+                    onOpenApp = { destination ->
+                        startActivity(android.content.Intent(this, ru.bruce.dispatcherinbox.MainActivity::class.java)
+                            .putExtra("destination", destination)
+                            .addFlags(android.content.Intent.FLAG_ACTIVITY_CLEAR_TOP or android.content.Intent.FLAG_ACTIVITY_SINGLE_TOP))
+                        finish()
+                    },
                 )
             }
         }
@@ -59,6 +65,7 @@ class AssistantEntryActivity : ComponentActivity() {
 private fun AssistantCaptureSheet(
     viewModel: CaptureViewModel,
     onDismiss: () -> Unit,
+    onOpenApp: (String) -> Unit,
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
@@ -77,6 +84,8 @@ private fun AssistantCaptureSheet(
             forceVoiceStart = false,
             onClose = onDismiss,
             compact = true,
+            onOpenApp = { onOpenApp("capture") },
+            onOpenSettings = { onOpenApp("settings") },
         )
     }
 }

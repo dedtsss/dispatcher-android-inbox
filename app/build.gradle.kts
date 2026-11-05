@@ -1,3 +1,5 @@
+import java.net.URI
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
@@ -18,8 +20,15 @@ android {
         applicationId = "ru.bruce.dispatcherinbox"
         minSdk = 26
         targetSdk = 36
-        versionCode = 8
-        versionName = "0.6.2"
+        versionCode = 9
+        versionName = "0.6.3"
+        val updateUrl = providers.gradleProperty("updateManifestUrl").orElse("").get()
+        if (updateUrl.isNotEmpty()) {
+            val uri = URI(updateUrl)
+            require(uri.scheme == "https" && !uri.host.isNullOrBlank() && uri.rawUserInfo == null && uri.fragment == null)
+            require(updateUrl.none { it.isISOControl() || it == '"' || it == '\\' })
+        }
+        buildConfigField("String", "UPDATE_MANIFEST_URL", "\"$updateUrl\"")
         manifestPlaceholders["usesCleartextTraffic"] = "false"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"

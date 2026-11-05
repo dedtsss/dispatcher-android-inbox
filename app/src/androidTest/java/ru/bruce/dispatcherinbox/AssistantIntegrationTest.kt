@@ -13,6 +13,48 @@ import ru.bruce.dispatcherinbox.assistant.AssistantEntryActivity
 import java.io.File
 
 class AssistantIntegrationTest {
+    @Test fun launcherWaitsAndOverlayControlsNavigate() = runBlocking<Unit> {
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        val context = instrumentation.targetContext
+        val settings = (context.applicationContext as DispatcherApplication).container.settingsRepository
+        val device = UiDevice.getInstance(instrumentation)
+        settings.setDefaultOpenMode("voice")
+        settings.setAssistantOpenMode("voice")
+        settings.setAutoStartAssistantRecording(true)
+        ActivityScenario.launch<MainActivity>(Intent(context, MainActivity::class.java)
+            .setAction(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)).use {
+            assertTrue(device.wait(Until.hasObject(By.desc("Начать запись")), 10000))
+            Thread.sleep(1200)
+            assertFalse(device.hasObject(By.desc("Остановить и сохранить")))
+        }
+        settings.setAssistantOpenMode("text")
+        val intent = Intent(context, AssistantEntryActivity::class.java).setAction(Intent.ACTION_ASSIST)
+        ActivityScenario.launch<AssistantEntryActivity>(intent).use { scenario ->
+            assertTrue(device.wait(Until.hasObject(By.desc("Закрыть ассистент")), 10000))
+            device.findObject(By.desc("Закрыть ассистент")).click()
+            assertTrue(device.wait(Until.gone(By.desc("Закрыть ассистент")), 5000))
+            instrumentation.waitForIdleSync()
+            assertEquals(androidx.lifecycle.Lifecycle.State.DESTROYED, scenario.state)
+        }
+        for ((control, target) in listOf("Настройки ассистента" to "Версия и обновления", "Catching" to "Сначала на телефоне · затем в Google Drive")) {
+            ActivityScenario.launch<AssistantEntryActivity>(intent).use {
+                assertTrue(device.wait(Until.hasObject(By.desc(control)), 10000))
+                device.findObject(By.desc(control)).click()
+                assertTrue(device.wait(Until.hasObject(By.text(target)), 10000))
+                assertFalse(device.hasObject(By.desc("Закрыть ассистент")))
+                assertFalse(device.hasObject(By.desc("Остановить и сохранить")))
+            }
+        }
+        device.findObject(By.text("Настройки")).click()
+        assertTrue(device.wait(Until.hasObject(By.text("Версия и обновления")), 10000))
+        ActivityScenario.launch<AssistantEntryActivity>(intent).use {
+            assertTrue(device.wait(Until.hasObject(By.desc("Catching")), 10000))
+            device.findObject(By.desc("Catching")).click()
+            assertTrue(device.wait(Until.hasObject(By.text("Сначала на телефоне · затем в Google Drive")), 10000))
+        }
+        device.pressBack()
+    }
+
     @Test fun assistantSettingsControlTextWaitingAndRecording() = runBlocking<Unit> {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val context = instrumentation.targetContext

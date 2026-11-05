@@ -15,6 +15,8 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.material.icons.filled.Keyboard
+import androidx.compose.foundation.clickable
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -28,6 +30,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -89,6 +92,8 @@ fun CaptureScreen(
     onClose: () -> Unit,
     modifier: Modifier = Modifier,
     compact: Boolean = false,
+    onOpenApp: () -> Unit = {},
+    onOpenSettings: () -> Unit = {},
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val context = LocalContext.current
@@ -140,15 +145,19 @@ fun CaptureScreen(
             .verticalScroll(rememberScrollState())
             .padding(horizontal = if (compact) 18.dp else 20.dp, vertical = 14.dp),
     ) {
-        Box(
-            modifier = Modifier.fillMaxWidth().height(if (compact) 56.dp else 88.dp)
-                .background(Brush.radialGradient(listOf(MaterialTheme.colorScheme.primary.copy(alpha = 0.10f), Color.Transparent))),
-            contentAlignment = Alignment.Center,
+        Row(
+            modifier = Modifier.fillMaxWidth().height(if (compact) 56.dp else 88.dp),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
-            Image(painterResource(R.drawable.catching_logo_wide), contentDescription = "Catching",
-                modifier = Modifier.width(if (compact) 112.dp else 156.dp))
-            if (compact) IconButton(onClick = onClose, modifier = Modifier.align(Alignment.TopEnd)) {
-                Icon(Icons.Default.Close, "Закрыть ассистент")
+            Image(
+                painterResource(R.drawable.catching_logo), contentDescription = "Catching",
+                contentScale = androidx.compose.ui.layout.ContentScale.Fit,
+                modifier = Modifier.weight(1f).fillMaxHeight()
+                    .then(if (compact) Modifier.clickable(onClick = onOpenApp) else Modifier),
+            )
+            if (compact) {
+                IconButton(onClick = onClose) { Icon(Icons.Default.Close, "Закрыть ассистент") }
+                IconButton(onClick = onOpenSettings) { Icon(Icons.Default.Settings, "Настройки ассистента") }
             }
         }
         if (!compact) Text("Сначала на телефоне · затем в Google Drive", style = MaterialTheme.typography.bodySmall,
