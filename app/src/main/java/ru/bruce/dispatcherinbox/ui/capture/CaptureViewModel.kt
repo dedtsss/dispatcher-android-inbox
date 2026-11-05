@@ -7,9 +7,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -18,7 +16,6 @@ import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import ru.bruce.dispatcherinbox.data.AppSettings
 import ru.bruce.dispatcherinbox.data.AttachmentDraft
 import ru.bruce.dispatcherinbox.data.InboxRepository
 import ru.bruce.dispatcherinbox.data.InboxSource
@@ -32,6 +29,10 @@ data class CaptureUiState(
     val text: String = "",
     val attachments: List<AttachmentDraft> = emptyList(),
     val isRecording: Boolean = false,
+    val recordingSeconds: Long = 0,
+    val driveConnected: Boolean = false,
+    val assistantOpenMode: String? = null,
+    val autoStartAssistantRecording: Boolean = false,
     val recordingAmplitude: Float = 0f,
     val isBusy: Boolean = false,
     val statusMessage: String? = null,
@@ -50,9 +51,9 @@ class CaptureViewModel(
     private val audioFeedback = AudioFeedbackManager()
     private val localState = MutableStateFlow(CaptureUiState())
     private val closeEvents = Channel<Unit>(Channel.BUFFERED)
+    private var amplitudeJob: kotlinx.coroutines.Job? = null
     private var closeAfterSave = false
     private var lastSavedId: String? = null
-    private var amplitudeJob: Job? = null
 
     val close = closeEvents.receiveAsFlow()
 
@@ -63,7 +64,8 @@ class CaptureViewModel(
     ) { local, settings, items ->
         closeAfterSave = settings.closeAfterSave
         val saved = lastSavedId?.let { id -> items.firstOrNull { it.item.id == id } }
-        val syncMessage = when (saved?.item?.status) {
+        val waitingForDrive = settings.driveAccount.isBlank() && saved != null && saved.item.status != InboxStatus.SYNCED
+        val syncMessage = if (waitingForDrive) "На телефоне · Ждёт Drive" else when (saved?.item?.status) {
             InboxStatus.SYNCING -> "Отправляется"
             InboxStatus.SYNCED -> "Отправлено"
             InboxStatus.ERROR -> saved.item.lastError ?: "Ошибка отправки"
@@ -72,7 +74,10 @@ class CaptureViewModel(
         }
         local.copy(
             statusMessage = syncMessage,
-            isError = saved?.item?.status == InboxStatus.ERROR || local.isError,
+            isError = (!waitingForDrive && saved?.item?.status == InboxStatus.ERROR) || local.isError,
+            driveConnected = settings.driveAccount.isNotBlank(),
+            assistantOpenMode = settings.assistantOpenMode,
+            autoStartAssistantRecording = settings.autoStartAssistantRecording,
             defaultOpenMode = settings.defaultOpenMode,
             recentItems = items.take(4),
         )
@@ -142,10 +147,24 @@ class CaptureViewModel(
             localState.value = localState.value.copy(
                 isRecording = true,
                 recordingAmplitude = 0f,
-                statusMessage = "Идет запись…",
+                recordingSeconds = 0,
+                statusMessage = "Идёт запись",
                 isError = false,
             )
-            startAmplitudeUpdates()
+
+            val started = android.os.SystemClock.elapsedRealtime()
+            amplitudeJob?.cancel()
+            amplitudeJob = viewModelScope.launch {
+                while (localState.value.isRecording) {
+                    val raw = recorder.currentAmplitude().coerceIn(0, 32767)
+                    val level = (kotlin.math.ln(1.0 + raw) / kotlin.math.ln(32768.0)).toFloat()
+                    localState.value = localState.value.copy(
+                        recordingAmplitude = localState.value.recordingAmplitude * 0.65f + level * 0.35f,
+                        recordingSeconds = (android.os.SystemClock.elapsedRealtime() - started) / 1000,
+                    )
+                    kotlinx.coroutines.delay(100)
+                }
+            }
         }.onFailure {
             audioFeedback.playErrorSound()
             showError("Не удалось начать запись")
@@ -154,7 +173,7 @@ class CaptureViewModel(
 
     fun stopRecordingAndSave() {
         if (!localState.value.isRecording) return
-        stopAmplitudeUpdates()
+        amplitudeJob?.cancel()
         localState.value = localState.value.copy(
             isRecording = false,
             recordingAmplitude = 0f,
@@ -189,7 +208,7 @@ class CaptureViewModel(
             showError("Введите текст или добавьте файл")
             return
         }
-        localState.value = localState.value.copy(isBusy = true, statusMessage = "Сохраняем…")
+        localState.value = localState.value.copy(attachments = drafts, isBusy = true, statusMessage = "Сохраняем…")
         runCatching { repository.save(text, drafts, source) }
             .onSuccess { item ->
                 lastSavedId = item.id
@@ -203,7 +222,7 @@ class CaptureViewModel(
     }
 
     private fun showError(message: String) {
-        stopAmplitudeUpdates()
+        amplitudeJob?.cancel()
         localState.value = localState.value.copy(
             isBusy = false,
             isRecording = false,
@@ -213,27 +232,8 @@ class CaptureViewModel(
         )
     }
 
-    private fun startAmplitudeUpdates() {
-        amplitudeJob?.cancel()
-        amplitudeJob = viewModelScope.launch {
-            var smoothed = 0f
-            while (localState.value.isRecording) {
-                val raw = recorder.currentAmplitude().coerceIn(0, 32_767) / 32_767f
-                val visibleLevel = kotlin.math.sqrt(raw)
-                smoothed = smoothed * 0.55f + visibleLevel * 0.45f
-                localState.value = localState.value.copy(recordingAmplitude = smoothed)
-                delay(80)
-            }
-        }
-    }
-
-    private fun stopAmplitudeUpdates() {
-        amplitudeJob?.cancel()
-        amplitudeJob = null
-    }
-
     override fun onCleared() {
-        stopAmplitudeUpdates()
+        amplitudeJob?.cancel()
         if (localState.value.isRecording) recorder.cancel()
         super.onCleared()
     }

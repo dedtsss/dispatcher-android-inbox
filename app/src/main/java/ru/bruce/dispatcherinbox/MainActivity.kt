@@ -15,6 +15,7 @@ import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.SystemBarStyle
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.EditNote
@@ -26,8 +27,12 @@ import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.padding
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -49,10 +54,13 @@ open class MainActivity : ComponentActivity() {
     protected open val forceVoiceStart: Boolean = false
     protected open val captureSource: String = InboxSource.MANUAL
 
+    private var requestedRoute by mutableStateOf("capture")
+    private var navigationRequest by mutableStateOf(0)
+
     private val roleRequest = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
         val message = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             val roles = getSystemService(RoleManager::class.java)
-            if (roles.isRoleHeld(RoleManager.ROLE_ASSISTANT)) "Диспетчер Bruce выбран ассистентом"
+            if (roles.isRoleHeld(RoleManager.ROLE_ASSISTANT)) "Catching выбран ассистентом"
             else "Роль ассистента не назначена"
         } else {
             "Проверьте выбор ассистента в настройках Android"
@@ -62,11 +70,17 @@ open class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        enableEdgeToEdge()
+        enableEdgeToEdge(
+            statusBarStyle = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT),
+            navigationBarStyle = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT),
+        )
+        requestedRoute = if (intent.getStringExtra("destination") == "settings") "settings" else "capture"
         val container = (application as DispatcherApplication).container
         setContent {
             DispatcherInboxTheme {
                 InboxApp(
+                    requestedRoute = requestedRoute,
+                    navigationRequest = navigationRequest,
                     application = application,
                     container = container,
                     forceVoiceStart = forceVoiceStart,
@@ -81,13 +95,20 @@ open class MainActivity : ComponentActivity() {
         }
     }
 
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        navigationRequest++
+        requestedRoute = if (intent.getStringExtra("destination") == "settings") "settings" else "capture"
+    }
+
     private fun requestAssistantRole() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             val roleManager = getSystemService(RoleManager::class.java)
             when {
                 !roleManager.isRoleAvailable(RoleManager.ROLE_ASSISTANT) -> openAssistantSettings()
                 roleManager.isRoleHeld(RoleManager.ROLE_ASSISTANT) ->
-                    Toast.makeText(this, "Диспетчер Bruce уже выбран ассистентом", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(this, "Catching уже выбран ассистентом", Toast.LENGTH_SHORT).show()
                 else -> roleRequest.launch(roleManager.createRequestRoleIntent(RoleManager.ROLE_ASSISTANT))
             }
         } else {
@@ -115,7 +136,7 @@ open class MainActivity : ComponentActivity() {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
             Toast.makeText(
                 this,
-                "Откройте шторку, нажмите «Изменить» и добавьте плитку «Диспетчер Bruce»",
+                "Откройте шторку, нажмите «Изменить» и добавьте плитку «Catching»",
                 Toast.LENGTH_LONG,
             ).show()
             return
@@ -163,6 +184,8 @@ private data class Destination(
 
 @Composable
 private fun InboxApp(
+    requestedRoute: String,
+    navigationRequest: Int,
     application: Application,
     container: AppContainer,
     forceVoiceStart: Boolean,
@@ -174,6 +197,11 @@ private fun InboxApp(
     onRequestQuickSettingsTile: () -> Unit,
 ) {
     val navController = rememberNavController()
+    LaunchedEffect(requestedRoute, navigationRequest) {
+        if (navController.currentDestination?.route != requestedRoute) {
+            navController.navigate(requestedRoute) { launchSingleTop = true }
+        }
+    }
     val destinations = listOf(
         Destination("capture", "Записать", Icons.Default.EditNote),
         Destination("queue", "Очередь", Icons.Default.Inbox),
@@ -205,7 +233,7 @@ private fun InboxApp(
         NavHost(
             navController = navController,
             startDestination = "capture",
-            modifier = Modifier.padding(padding),
+            modifier = Modifier.padding(padding).consumeWindowInsets(padding),
         ) {
             composable("capture") {
                 val captureViewModel: CaptureViewModel = viewModel(
@@ -220,7 +248,7 @@ private fun InboxApp(
             }
             composable("queue") {
                 val queueViewModel: QueueViewModel = viewModel(
-                    factory = QueueViewModel.Factory(container.inboxRepository),
+                    factory = QueueViewModel.Factory(container.inboxRepository, container.settingsRepository),
                 )
                 QueueScreen(queueViewModel)
             }

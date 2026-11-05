@@ -1,60 +1,292 @@
-name: Android Debug APK (manual)
+name: Проверка и выпуск Catching APK
 
 on:
+  push:
+    branches: [issue-7-drive-inbox]
   workflow_dispatch:
+    inputs:
+      history_run_id:
+        description: Необязательно — взять неизменённые исторические APK из указанного запуска с проверкой SHA-256
+        required: false
+        default: ""
+        type: string
+      apk_run_id:
+        description: Необязательно — повторить device-проверку APK из указанного запуска без пересборки
+        required: false
+        default: ""
+        type: string
+      preserve_device_artifacts:
+        description: Необязательно — сохранить архивы device-проверки на 1 день для повторного запуска
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: read
+  actions: read
 
 jobs:
-  build:
+  build-and-device:
+    if: inputs.apk_run_id == ''
+    name: Тесты, подписанный release APK и Android device QA
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
+      - name: Получить исходники
         uses: actions/checkout@v4
-
-      - name: Set up JDK 17
+        with:
+          fetch-depth: 0
+      - name: Подготовить JDK 17
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: "17"
-
-      - name: Set up Gradle
+      - name: Подготовить Gradle
         uses: gradle/actions/setup-gradle@v4
-
-      - name: Set up Android SDK
+        with:
+          cache-read-only: false
+      - name: Подготовить Android SDK
         uses: android-actions/setup-android@v4
-
-      - name: Install Android SDK 36
+      - name: Установить Android SDK 36
         run: sdkmanager "platforms;android-36" "build-tools;35.0.0"
-
-      - name: Prepare stable signing key
+      - name: Восстановить постоянный ключ подписи
         env:
           SIGNING_KEYSTORE_BASE64: ${{ secrets.DISPATCHER_SIGNING_KEYSTORE_BASE64 }}
         run: |
-          if [[ -z "$SIGNING_KEYSTORE_BASE64" ]]; then
-            echo "Stable signing key is unavailable; using the standard debug key for this run."
-            exit 0
-          fi
+          test -n "$SIGNING_KEYSTORE_BASE64" || { echo "Постоянный ключ подписи отсутствует"; exit 1; }
           mkdir -p "$RUNNER_TEMP/dispatcher-signing"
           printf '%s' "$SIGNING_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/dispatcher-signing/dispatcher.jks"
-
-      - name: Test and build debug APK
+      - name: Проверить код и собрать release APK
         env:
           DISPATCHER_SIGNING_STORE_FILE: ${{ runner.temp }}/dispatcher-signing/dispatcher.jks
           DISPATCHER_SIGNING_STORE_PASSWORD: ${{ secrets.DISPATCHER_SIGNING_STORE_PASSWORD }}
           DISPATCHER_SIGNING_KEY_ALIAS: ${{ secrets.DISPATCHER_SIGNING_KEY_ALIAS }}
           DISPATCHER_SIGNING_KEY_PASSWORD: ${{ secrets.DISPATCHER_SIGNING_KEY_PASSWORD }}
-        run: ./gradlew testDebugUnitTest assembleDebug --stacktrace
-
-      - name: Verify APK signature
+          UPDATE_MANIFEST_URL: ${{ vars.UPDATE_MANIFEST_URL }}
+        run: ./gradlew testReleaseUnitTest lintRelease assembleRelease assembleDebug assembleDebugAndroidTest "-PupdateManifestUrl=$UPDATE_MANIFEST_URL" --stacktrace
+      - name: Собрать исторические APK с прежними схемами и постоянной подписью
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HISTORY_RUN_ID: ${{ inputs.history_run_id || '42037542998' }}
+          DISPATCHER_SIGNING_STORE_FILE: ${{ runner.temp }}/dispatcher-signing/dispatcher.jks
+          DISPATCHER_SIGNING_STORE_PASSWORD: ${{ secrets.DISPATCHER_SIGNING_STORE_PASSWORD }}
+          DISPATCHER_SIGNING_KEY_ALIAS: ${{ secrets.DISPATCHER_SIGNING_KEY_ALIAS }}
+          DISPATCHER_SIGNING_KEY_PASSWORD: ${{ secrets.DISPATCHER_SIGNING_KEY_PASSWORD }}
+        run: scripts/upgrade/build-history.sh
+      - name: Проверить подпись и сохранить параметры OAuth
         run: |
-          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify app/build/outputs/apk/debug/app-debug.apk
-
-      - name: Upload debug APK
+          mkdir -p release
+          cp app/build/outputs/apk/release/app-release.apk release/catching-0.6.4-release.apk
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs release/catching-0.6.4-release.apk > release/certificate.txt
+          sha256sum release/catching-0.6.4-release.apk | sed 's#  release/#  #' > release/SHA256SUMS
+          {
+            echo 'Приложение: Catching 0.6.4 (versionCode 10)'
+            echo 'Android OAuth package: ru.bruce.dispatcherinbox'
+            echo 'Scope: https://www.googleapis.com/auth/drive.file'
+            echo 'Нужен Android OAuth client с SHA-1 ниже и включённый Google Drive API.'
+            cat release/certificate.txt
+          } > release/oauth-registration.txt
+          cat release/oauth-registration.txt >> "$GITHUB_STEP_SUMMARY"
+      - name: Сформировать метаданные обновления при настроенном URL APK
+        if: vars.UPDATE_APK_URL != ''
+        env:
+          UPDATE_APK_URL: ${{ vars.UPDATE_APK_URL }}
+        run: python3 scripts/update/generate-manifest.py --apk release/catching-0.6.4-release.apk --apk-url "$UPDATE_APK_URL" --build-tools "$ANDROID_HOME/build-tools/35.0.0" --output release/update.json
+      - name: Ограничить размер подписанного release artifact
+        run: |
+          bytes=$(du -sb release | cut -f1)
+          test "$bytes" -le $((50 * 1024 * 1024)) || { echo "Артефакт выпуска превышает 50 MiB: $bytes bytes"; exit 1; }
+      - name: Опубликовать точный release APK
         uses: actions/upload-artifact@v4
         with:
-          name: priemnik-debug-apk
-          path: app/build/outputs/apk/debug/app-debug.apk
+          name: catching-0.6.4-release
+          path: release/
           if-no-files-found: error
+          retention-days: 30
+      - name: Подготовить APK в общей рабочей области для device QA
+        run: |
+          mkdir -p apk/debug apk/release apk/androidTest/debug
+          cp app/build/outputs/apk/debug/app-debug.apk apk/debug/
+          cp app/build/outputs/apk/release/app-release.apk apk/release/
+          cp app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk apk/androidTest/debug/
+      - name: Разрешить KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Проверить upgrade, Share, recovery и системный ассистент на Android
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          arch: x86_64
+          profile: pixel_2
+          script: |
+            scripts/upgrade/install-over.sh
+            adb install -r apk/debug/app-debug.apk
+            adb install -r apk/androidTest/debug/app-debug-androidTest.apk
+            adb shell pm grant ru.bruce.dispatcherinbox android.permission.RECORD_AUDIO
+            adb shell svc wifi disable
+            adb shell svc data disable
+            timeout 240s adb shell am instrument -w -e class ru.bruce.dispatcherinbox.CaptureIntegrationTest,ru.bruce.dispatcherinbox.AssistantIntegrationTest,ru.bruce.dispatcherinbox.UpdateRecoveryTest ru.bruce.dispatcherinbox.test/androidx.test.runner.AndroidJUnitRunner | tee instrumentation.txt
+            adb logcat -d > logcat.txt
+            adb shell dumpsys activity exit-info ru.bruce.dispatcherinbox > exit-info.txt
+            adb shell dumpsys activity processes > processes.txt
+            adb shell dumpsys window > windows.txt
+            adb pull /sdcard/Android/data/ru.bruce.dispatcherinbox/files/catching-evidence ./evidence || true
+            grep -q 'OK (' instrumentation.txt
+            adb shell am force-stop ru.bruce.dispatcherinbox
+            timeout 240s adb shell am instrument -w -e class ru.bruce.dispatcherinbox.ProcessRestartTest ru.bruce.dispatcherinbox.test/androidx.test.runner.AndroidJUnitRunner | tee restart.txt
+            adb logcat -d > logcat.txt
+            adb pull /sdcard/Android/data/ru.bruce.dispatcherinbox/files/catching-evidence ./evidence || true
+            grep -q 'OK (' restart.txt
+            UPGRADE_LABELS=v062 scripts/upgrade/install-over.sh
+            adb install -r apk/release/app-release.apk
+            adb shell am start -n ru.bruce.dispatcherinbox/.MainActivity
+            adb shell dumpsys package ru.bruce.dispatcherinbox > installed-package.txt
+      - name: Ограничить размер device QA evidence
+        id: device-evidence-budget
+        if: always()
+        run: |
+          bytes=0
+          for path in upgrade-evidence instrumentation.txt restart.txt logcat.txt exit-info.txt processes.txt windows.txt installed-package.txt evidence; do
+            [ ! -e "$path" ] || bytes=$((bytes + $(du -sb "$path" | cut -f1)))
+          done
+          test "$bytes" -le $((50 * 1024 * 1024)) || { echo "Доказательства Android превышают 50 MiB: $bytes bytes"; exit 1; }
+          echo 'ok=true' >> "$GITHUB_OUTPUT"
+      - name: Ограничить размер unit-test reports
+        id: unit-reports-budget
+        if: always()
+        run: |
+          bytes=0
+          for path in app/build/test-results app/build/reports; do
+            [ ! -e "$path" ] || bytes=$((bytes + $(du -sb "$path" | cut -f1)))
+          done
+          test "$bytes" -le $((20 * 1024 * 1024)) || { echo "Отчёты тестов превышают 20 MiB: $bytes bytes"; exit 1; }
+          echo 'ok=true' >> "$GITHUB_OUTPUT"
+      - name: Сохранить результаты проверок
+        if: always() && steps.unit-reports-budget.outputs.ok == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: результаты-проверок
+          path: |
+            app/build/test-results/
+            app/build/reports/
+          retention-days: 3
+      - name: Сохранить Android device evidence
+        if: always() && steps.device-evidence-budget.outputs.ok == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: проверки-на-Android
+          path: |
+            upgrade-evidence/
+            instrumentation.txt
+            restart.txt
+            logcat.txt
+            exit-info.txt
+            processes.txt
+            windows.txt
+            installed-package.txt
+            evidence/
+          retention-days: 3
+      - name: Ограничить суммарный размер APK для cross-runner replay
+        if: inputs.preserve_device_artifacts
+        run: |
+          bytes=$(du -sb app/build/outputs/apk history-apk | awk '{sum += $1} END {print sum}')
+          test "$bytes" -le $((150 * 1024 * 1024)) || { echo "Артефакты повтора превышают 150 MiB: $bytes bytes"; exit 1; }
+      - name: Сохранить APK для cross-runner replay по запросу
+        if: inputs.preserve_device_artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: проверка-на-устройстве
+          path: |
+            app/build/outputs/apk/release/*.apk
+            app/build/outputs/apk/debug/*.apk
+            app/build/outputs/apk/androidTest/debug/*.apk
+          retention-days: 1
+      - name: Сохранить исторические APK для cross-runner replay по запросу
+        if: inputs.preserve_device_artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: исторические-APK
+          path: history-apk/
+          retention-days: 1
+  device-replay:
+    name: Локальное сохранение, Share и системный ассистент на Android
+    if: inputs.apk_run_id != ''
+    runs-on: ubuntu-latest
+    steps:
+      - name: Получить сценарии обновления
+        uses: actions/checkout@v4
+      - name: Получить исторические APK
+        uses: actions/download-artifact@v4
+        with:
+          name: исторические-APK
+          path: history-apk
+          run-id: ${{ inputs.apk_run_id || github.run_id }}
+          github-token: ${{ github.token }}
+      - name: Получить APK
+        uses: actions/download-artifact@v4
+        with:
+          name: проверка-на-устройстве
+          path: apk
+          run-id: ${{ inputs.apk_run_id || github.run_id }}
+          github-token: ${{ github.token }}
+      - name: Разрешить KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Повторить device QA по exact run ID
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          arch: x86_64
+          profile: pixel_2
+          script: |
+            scripts/upgrade/install-over.sh
+            adb install -r apk/debug/app-debug.apk
+            adb install -r apk/androidTest/debug/app-debug-androidTest.apk
+            adb shell pm grant ru.bruce.dispatcherinbox android.permission.RECORD_AUDIO
+            adb shell svc wifi disable
+            adb shell svc data disable
+            timeout 240s adb shell am instrument -w -e class ru.bruce.dispatcherinbox.CaptureIntegrationTest,ru.bruce.dispatcherinbox.AssistantIntegrationTest,ru.bruce.dispatcherinbox.UpdateRecoveryTest ru.bruce.dispatcherinbox.test/androidx.test.runner.AndroidJUnitRunner | tee instrumentation.txt
+            adb logcat -d > logcat.txt
+            adb shell dumpsys activity exit-info ru.bruce.dispatcherinbox > exit-info.txt
+            adb shell dumpsys activity processes > processes.txt
+            adb shell dumpsys window > windows.txt
+            adb pull /sdcard/Android/data/ru.bruce.dispatcherinbox/files/catching-evidence ./evidence || true
+            grep -q 'OK (' instrumentation.txt
+            adb shell am force-stop ru.bruce.dispatcherinbox
+            timeout 240s adb shell am instrument -w -e class ru.bruce.dispatcherinbox.ProcessRestartTest ru.bruce.dispatcherinbox.test/androidx.test.runner.AndroidJUnitRunner | tee restart.txt
+            adb logcat -d > logcat.txt
+            adb pull /sdcard/Android/data/ru.bruce.dispatcherinbox/files/catching-evidence ./evidence || true
+            grep -q 'OK (' restart.txt
+            UPGRADE_LABELS=v062 scripts/upgrade/install-over.sh
+            adb install -r apk/release/app-release.apk
+            adb shell am start -n ru.bruce.dispatcherinbox/.MainActivity
+            adb shell dumpsys package ru.bruce.dispatcherinbox > installed-package.txt
+      - name: Ограничить размер сохранённых replay evidence
+        id: replay-evidence-budget
+        if: always()
+        run: |
+          bytes=0
+          for path in upgrade-evidence instrumentation.txt restart.txt logcat.txt exit-info.txt processes.txt windows.txt installed-package.txt evidence; do
+            [ ! -e "$path" ] || bytes=$((bytes + $(du -sb "$path" | cut -f1)))
+          done
+          test "$bytes" -le $((50 * 1024 * 1024)) || { echo "Доказательства повтора превышают 50 MiB: $bytes bytes"; exit 1; }
+          echo 'ok=true' >> "$GITHUB_OUTPUT"
+      - name: Сохранить проверки и снимки экрана
+        if: always() && steps.replay-evidence-budget.outputs.ok == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: проверки-на-Android
+          path: |
+            upgrade-evidence/
+            instrumentation.txt
+            restart.txt
+            logcat.txt
+            exit-info.txt
+            processes.txt
+            windows.txt
+            installed-package.txt
+            evidence/
           retention-days: 3

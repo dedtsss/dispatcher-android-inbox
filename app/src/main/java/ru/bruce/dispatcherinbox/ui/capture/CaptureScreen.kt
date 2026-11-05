@@ -3,19 +3,38 @@ package ru.bruce.dispatcherinbox.ui.capture
 import android.Manifest
 import android.content.pm.PackageManager
 import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.layout.wrapContentHeight
+import androidx.compose.runtime.remember
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.material.icons.filled.Keyboard
+import androidx.compose.foundation.clickable
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.graphics.Brush
+import ru.bruce.dispatcherinbox.R
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
@@ -50,12 +69,11 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.CornerRadius
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -76,9 +94,14 @@ fun CaptureScreen(
     onClose: () -> Unit,
     modifier: Modifier = Modifier,
     compact: Boolean = false,
+    onOpenApp: () -> Unit = {},
+    onOpenSettings: () -> Unit = {},
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val context = LocalContext.current
+    var textExpanded by rememberSaveable { mutableStateOf(false) }
+    val focusRequester = remember { FocusRequester() }
+    val keyboard = LocalSoftwareKeyboardController.current
     var requestedAutoStart by rememberSaveable { mutableStateOf(false) }
 
     val audioPermission = rememberLauncherForActivityResult(
@@ -89,12 +112,6 @@ fun CaptureScreen(
     val filePicker = rememberLauncherForActivityResult(ActivityResultContracts.GetMultipleContents()) { uris ->
         viewModel.addAttachments(uris)
     }
-    val photoPicker = rememberLauncherForActivityResult(
-        ActivityResultContracts.PickMultipleVisualMedia(maxItems = 20),
-    ) { uris ->
-        viewModel.addAttachments(uris)
-    }
-
     fun startWithPermission() {
         if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) ==
             PackageManager.PERMISSION_GRANTED
@@ -105,44 +122,70 @@ fun CaptureScreen(
         }
     }
 
-    LaunchedEffect(state.defaultOpenMode, forceVoiceStart) {
-        if (!requestedAutoStart && state.defaultOpenMode != null &&
-            (forceVoiceStart || state.defaultOpenMode == "voice")
-        ) {
+    LaunchedEffect(state.defaultOpenMode, state.assistantOpenMode, forceVoiceStart) {
+        if (!requestedAutoStart && state.defaultOpenMode != null && state.assistantOpenMode != null) {
             requestedAutoStart = true
-            startWithPermission()
+            val mode = CaptureEntryPolicy.mode(compact, state.defaultOpenMode!!, state.assistantOpenMode!!, forceVoiceStart)
+            textExpanded = mode == "text" && compact
+            if (CaptureEntryPolicy.autoRecord(compact, mode, state.autoStartAssistantRecording, forceVoiceStart)) startWithPermission()
+        }
+    }
+    LaunchedEffect(textExpanded) {
+        if (textExpanded) {
+            // Ждём появления поля и завершения перемещения нижней карточки.
+            kotlinx.coroutines.delay(180)
+            focusRequester.requestFocus()
+            keyboard?.show()
         }
     }
     LaunchedEffect(viewModel) { viewModel.close.collect { onClose() } }
 
     Column(
         modifier = modifier
-            .fillMaxSize()
+            .then(if (compact) Modifier.wrapContentHeight() else Modifier.fillMaxSize())
+            .imePadding()
             .verticalScroll(rememberScrollState())
             .padding(horizontal = if (compact) 18.dp else 20.dp, vertical = 14.dp),
     ) {
-        Text(
-            if (compact) "Диспетчер Bruce" else "Быстрая запись",
-            style = MaterialTheme.typography.headlineSmall,
-        )
-        Text(
-            if (compact) "Продиктуйте или добавьте файл"
-            else "Текст, голос или файл — остальное сделает Диспетчер",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        Spacer(Modifier.height(if (compact) 10.dp else 16.dp))
+        Row(
+            modifier = Modifier.fillMaxWidth().height(if (compact) 56.dp else 88.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Image(
+                painterResource(R.drawable.catching_logo), contentDescription = if (compact) null else "Catching",
+                contentScale = androidx.compose.ui.layout.ContentScale.Fit,
+                modifier = Modifier.weight(1f).fillMaxHeight()
+                    .then(if (compact) Modifier.clickable(onClick = onOpenApp)
+                        .semantics { contentDescription = "Catching" } else Modifier),
+            )
+            if (compact) {
+                IconButton(onClick = onClose) { Icon(Icons.Default.Close, "Закрыть ассистент") }
+                IconButton(onClick = onOpenSettings) { Icon(Icons.Default.Settings, "Настройки ассистента") }
+            }
+        }
+        if (!compact) Text("Сначала на телефоне · затем в Google Drive", style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.align(Alignment.CenterHorizontally))
+        if (!compact || !textExpanded) VoiceControl(state, compact, onClick = { if (state.isRecording) viewModel.stopRecordingAndSave() else startWithPermission() })
+        Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            OutlinedButton(onClick = { textExpanded = !textExpanded }, enabled = !state.isBusy && !state.isRecording,
+                modifier = Modifier.weight(1f)) { Icon(if (compact && textExpanded) Icons.Default.Mic else Icons.Default.Keyboard, null, Modifier.size(18.dp)); Spacer(Modifier.width(6.dp)); Text(if (compact && textExpanded) "Голос" else "Текст") }
+            OutlinedButton(onClick = { filePicker.launch("*/*") }, enabled = !state.isBusy && !state.isRecording,
+                modifier = Modifier.weight(1f)) { Icon(Icons.Default.AttachFile, null, Modifier.size(18.dp)); Spacer(Modifier.width(6.dp)); Text("Файл") }
+        }
+        if (textExpanded || state.text.isNotEmpty()) {
+            OutlinedTextField(
+                value = state.text,
+                onValueChange = viewModel::setText,
+                enabled = !state.isBusy,
+                label = { Text("Что записать?") },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(if (compact) 112.dp else 180.dp)
+                    .focusRequester(focusRequester),
+                shape = RoundedCornerShape(20.dp),
+            )
 
-        OutlinedTextField(
-            value = state.text,
-            onValueChange = viewModel::setText,
-            enabled = !state.isBusy,
-            label = { Text("Что записать?") },
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(if (compact) 112.dp else 180.dp),
-            shape = RoundedCornerShape(20.dp),
-        )
+        }
 
         if (state.attachments.isNotEmpty()) {
             Text(
@@ -158,57 +201,11 @@ fun CaptureScreen(
             }
         }
 
-        Spacer(Modifier.height(10.dp))
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(4.dp),
-        ) {
-            IconButton(
-                enabled = !state.isBusy && !state.isRecording,
-                onClick = { filePicker.launch("*/*") },
-            ) { Icon(Icons.Default.AttachFile, contentDescription = "Выбрать файлы") }
-            IconButton(
-                enabled = !state.isBusy && !state.isRecording,
-                onClick = {
-                    photoPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
-                },
-            ) { Icon(Icons.Default.Image, contentDescription = "Выбрать фотографии") }
-            IconButton(
-                enabled = !state.isBusy,
-                onClick = {
-                    if (state.isRecording) viewModel.stopRecordingAndSave() else startWithPermission()
-                },
-            ) {
-                Icon(
-                    if (state.isRecording) Icons.Default.Stop else Icons.Default.Mic,
-                    contentDescription = if (state.isRecording) "Остановить запись" else "Записать голос",
-                    tint = if (state.isRecording) MaterialTheme.colorScheme.error
-                    else MaterialTheme.colorScheme.primary,
-                )
-            }
-            if (state.isRecording) {
-                RecordingLevelIndicator(
-                    amplitude = state.recordingAmplitude,
-                    modifier = Modifier.weight(1f),
-                )
-            } else state.statusMessage?.let { message ->
-                Surface(
-                    color = if (state.isError) MaterialTheme.colorScheme.errorContainer
-                    else MaterialTheme.colorScheme.secondaryContainer,
-                    shape = RoundedCornerShape(12.dp),
-                    modifier = Modifier.weight(1f),
-                ) {
-                    Text(
-                        message,
-                        modifier = Modifier.padding(horizontal = 11.dp, vertical = 8.dp),
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis,
-                        style = MaterialTheme.typography.bodySmall,
-                    )
-                }
-            }
+        state.statusMessage?.let { message ->
+            Text(message, modifier = Modifier.padding(vertical = 8.dp),
+                color = if (state.isError) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant)
         }
+        if (textExpanded || state.attachments.isNotEmpty()) {
         Spacer(Modifier.height(10.dp))
         Button(
             onClick = viewModel::save,
@@ -220,8 +217,11 @@ fun CaptureScreen(
             Text(if (state.isBusy) "Сохраняем…" else "Сохранить")
         }
 
-        RecentJournal(
-            items = state.recentItems.take(if (compact) 2 else 4),
+        }
+
+        if (!compact) RecentJournal(
+            items = state.recentItems.take(4),
+            driveConnected = state.driveConnected,
             modifier = Modifier.padding(top = 16.dp),
         )
         Spacer(Modifier.height(if (compact) 18.dp else 8.dp))
@@ -229,56 +229,36 @@ fun CaptureScreen(
 }
 
 @Composable
-private fun RecordingLevelIndicator(
-    amplitude: Float,
-    modifier: Modifier = Modifier,
-) {
-    val animatedAmplitude by animateFloatAsState(
-        targetValue = amplitude.coerceIn(0f, 1f),
-        animationSpec = tween(durationMillis = 80),
-        label = "recordingAmplitude",
-    )
-    val indicatorColor = MaterialTheme.colorScheme.onErrorContainer
-
-    Surface(
-        color = MaterialTheme.colorScheme.errorContainer,
-        shape = RoundedCornerShape(12.dp),
-        modifier = modifier,
-    ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 11.dp, vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(9.dp),
-        ) {
-            Canvas(
-                modifier = Modifier
-                    .width(54.dp)
-                    .height(22.dp),
-            ) {
-                val factors = floatArrayOf(0.48f, 0.72f, 0.9f, 1f, 0.84f, 0.66f, 0.44f)
-                val barWidth = size.width / 15f
-                val gap = barWidth
-                factors.forEachIndexed { index, factor ->
-                    val heightFraction = (0.16f + animatedAmplitude * factor * 0.84f)
-                        .coerceIn(0.16f, 1f)
-                    val barHeight = size.height * heightFraction
-                    drawRoundRect(
-                        color = indicatorColor,
-                        topLeft = Offset(
-                            x = index * (barWidth + gap),
-                            y = (size.height - barHeight) / 2f,
-                        ),
-                        size = Size(barWidth, barHeight),
-                        cornerRadius = CornerRadius(barWidth / 2f, barWidth / 2f),
-                    )
-                }
+private fun VoiceControl(state: CaptureUiState, compact: Boolean, onClick: () -> Unit) {
+    val amplitude by animateFloatAsState(if (state.isRecording) state.recordingAmplitude else 0f,
+        animationSpec = tween(180, easing = FastOutSlowInEasing), label = "Амплитуда")
+    val primary = MaterialTheme.colorScheme.primary
+    Column(Modifier.fillMaxWidth().padding(top = 8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+        Box(Modifier.size(if (compact) 132.dp else 156.dp).background(
+            Brush.radialGradient(listOf(primary.copy(alpha = 0.10f + amplitude * 0.10f), Color.Transparent))),
+            contentAlignment = Alignment.Center) {
+            Button(onClick = onClick, enabled = !state.isBusy, shape = CircleShape,
+                modifier = Modifier.size(if (compact) 88.dp else 100.dp),
+                contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp),
+                border = BorderStroke(1.dp, primary.copy(alpha = 0.3f)),
+                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primaryContainer,
+                    contentColor = primary)) {
+                Icon(if (state.isRecording) Icons.Default.Stop else Icons.Default.Mic,
+                    if (state.isRecording) "Остановить и сохранить" else "Начать запись", Modifier.size(34.dp))
             }
-            Text(
-                "Запись идет",
-                style = MaterialTheme.typography.bodySmall,
-                color = indicatorColor,
-                maxLines = 1,
-            )
+        }
+        Text(if (state.isRecording) "%02d:%02d".format(state.recordingSeconds / 60, state.recordingSeconds % 60) else "Голос",
+            style = MaterialTheme.typography.titleMedium)
+        Canvas(Modifier.width(120.dp).height(24.dp)) {
+            val path = androidx.compose.ui.graphics.Path()
+            for (x in 0..80) {
+                val t = x / 80f
+                val y = size.height / 2 + kotlin.math.sin(t * kotlin.math.PI * 4).toFloat() *
+                    kotlin.math.sin(t * kotlin.math.PI).toFloat() * amplitude * size.height * 0.32f
+                if (x == 0) path.moveTo(0f, y) else path.lineTo(t * size.width, y)
+            }
+            drawPath(path, primary.copy(alpha = if (state.isRecording) 0.7f else 0.2f),
+                style = androidx.compose.ui.graphics.drawscope.Stroke(width = 1.5.dp.toPx(), cap = androidx.compose.ui.graphics.StrokeCap.Round))
         }
     }
 }
@@ -330,6 +310,7 @@ private fun AttachmentCard(draft: AttachmentDraft, onRemove: () -> Unit) {
 @Composable
 private fun RecentJournal(
     items: List<InboxItemWithAttachments>,
+    driveConnected: Boolean,
     modifier: Modifier = Modifier,
 ) {
     Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(7.dp)) {
@@ -354,13 +335,13 @@ private fun RecentJournal(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         } else {
-            items.forEach { entry -> RecentItemCard(entry) }
+            items.forEach { entry -> RecentItemCard(entry, driveConnected) }
         }
     }
 }
 
 @Composable
-private fun RecentItemCard(entry: InboxItemWithAttachments) {
+private fun RecentItemCard(entry: InboxItemWithAttachments, driveConnected: Boolean) {
     val item = entry.item
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -396,33 +377,16 @@ private fun RecentItemCard(entry: InboxItemWithAttachments) {
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
-            StatusBadge(item.status)
+            StatusBadge(item.status, driveConnected)
         }
     }
 }
 
 @Composable
-private fun StatusBadge(status: String) {
-    val color: Color
-    val label: String
-    when (status) {
-        InboxStatus.SYNCED -> {
-            color = MaterialTheme.colorScheme.primaryContainer
-            label = "Отправлено"
-        }
-        InboxStatus.ERROR -> {
-            color = MaterialTheme.colorScheme.errorContainer
-            label = "Ошибка"
-        }
-        InboxStatus.SYNCING -> {
-            color = MaterialTheme.colorScheme.tertiaryContainer
-            label = "Отправка"
-        }
-        else -> {
-            color = MaterialTheme.colorScheme.secondaryContainer
-            label = "В очереди"
-        }
-    }
+private fun StatusBadge(status: String, driveConnected: Boolean) {
+    val delivery = ru.bruce.dispatcherinbox.ui.deliveryStatus(status, driveConnected)
+    val label = delivery.label
+    val color = if (delivery.isError) MaterialTheme.colorScheme.errorContainer else MaterialTheme.colorScheme.secondaryContainer
     Surface(color = color, shape = RoundedCornerShape(9.dp)) {
         Text(
             label,

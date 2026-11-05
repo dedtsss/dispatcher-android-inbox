@@ -32,7 +32,9 @@ class InboxRepository(
             attachmentStore.deleteAttachments(attachments)
             throw error
         }
-        syncScheduler.scheduleAutomatic()
+        drafts.forEach { runCatching { attachmentStore.deleteDraft(it) } }
+        // Запись уже зафиксирована: сбой планировщика не должен провоцировать повторный capture.
+        runCatching { syncScheduler.scheduleAutomatic() }
         return item
     }
 

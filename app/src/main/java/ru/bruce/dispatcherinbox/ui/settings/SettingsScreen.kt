@@ -18,7 +18,6 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
@@ -32,7 +31,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.Lifecycle
@@ -55,35 +53,32 @@ fun SettingsScreen(
             .padding(horizontal = 18.dp, vertical = 12.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
+        ru.bruce.dispatcherinbox.update.UpdateSection()
         Text("Настройки", style = MaterialTheme.typography.headlineSmall)
-        Text(
-            "В debug-сборке пустой URL включает локальную заглушку. Для реальной отправки нужны URL и token.",
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            style = MaterialTheme.typography.bodySmall,
-        )
-        OutlinedTextField(
-            value = settings.apiBaseUrl,
-            onValueChange = viewModel::setApiBaseUrl,
-            label = { Text("Dispatcher API base URL") },
-            placeholder = { Text("https://dispatcher.example/") },
-            singleLine = true,
-            modifier = Modifier.fillMaxWidth(),
-        )
-        OutlinedTextField(
-            value = settings.bearerToken,
-            onValueChange = viewModel::setBearerToken,
-            label = { Text("Device / Bearer token") },
-            visualTransformation = PasswordVisualTransformation(),
-            singleLine = true,
-            modifier = Modifier.fillMaxWidth(),
-        )
+        val context = LocalContext.current
+        Surface(
+            shape = RoundedCornerShape(24.dp),
+            color = MaterialTheme.colorScheme.surfaceVariant,
+        ) {
+            Column(Modifier.fillMaxWidth().padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text("Google Drive", style = MaterialTheme.typography.titleLarge)
+                Text(settings.driveAccount.ifBlank { "Аккаунт не выбран" })
+                Text(settings.driveStatus, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                var diagnosticsExpanded by remember { mutableStateOf(false) }
+                androidx.compose.material3.TextButton(onClick = { diagnosticsExpanded = !diagnosticsExpanded }) { Text("Диагностика подключения") }
+                if (diagnosticsExpanded) androidx.compose.foundation.text.selection.SelectionContainer {
+                    Text(settings.driveDiagnostics.ifBlank { "Диагностика появится после попытки подключения" }, style = MaterialTheme.typography.bodySmall)
+                }
+                Text("Оригиналы → Мой диск / Catching / Inbox. Без сети всё сохраняется на телефоне.")
+                Button(onClick = {
+                    context.startActivity(android.content.Intent(context, ru.bruce.dispatcherinbox.drive.DriveConnectActivity::class.java))
+                }, modifier = Modifier.fillMaxWidth()) {
+                    Text(if (settings.driveAccount.isBlank()) "Подключить Google Drive" else "Подключить повторно")
+                }
+            }
+        }
         SettingSwitch("Автосинхронизация", settings.autoSync, viewModel::setAutoSync)
         SettingSwitch("Только по Wi-Fi", settings.wifiOnly, viewModel::setWifiOnly)
-        SettingSwitch(
-            label = "Удалять внутренние копии после отправки",
-            checked = settings.deleteAfterSync,
-            onCheckedChange = viewModel::setDeleteAfterSync,
-        )
         SettingSwitch("Закрывать после сохранения", settings.closeAfterSave, viewModel::setCloseAfterSave)
         HorizontalDivider()
         Text("Открывать по умолчанию", style = MaterialTheme.typography.titleMedium)
@@ -101,9 +96,17 @@ fun SettingsScreen(
         }
         HorizontalDivider()
         Text("Системный ассистент", style = MaterialTheme.typography.titleMedium)
+        Text("При вызове ассистента", style = MaterialTheme.typography.bodyLarge)
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            for ((mode, label) in listOf("text" to "Текст", "voice" to "Голос")) {
+                FilterChip(selected = settings.assistantOpenMode == mode, onClick = { viewModel.setAssistantOpenMode(mode) }, label = { Text(label) })
+            }
+        }
+        SettingSwitch("Сразу начинать запись", settings.autoStartAssistantRecording, viewModel::setAutoStartAssistantRecording,
+            enabled = settings.assistantOpenMode == "voice")
         AssistantStatus()
         Text(
-            "На HyperOS экран обычно называется «Помощник и голосовой ввод». Выберите «Диспетчер Bruce» как цифрового помощника. Голосовой ввод менять не нужно: приложение не распознает речь.",
+            "На HyperOS экран обычно называется «Помощник и голосовой ввод». Выберите «Catching» как цифрового помощника. Голосовой ввод менять не нужно: приложение не распознает речь.",
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             style = MaterialTheme.typography.bodySmall,
         )
@@ -119,7 +122,7 @@ fun SettingsScreen(
         HorizontalDivider()
         Text("Быстрый доступ", style = MaterialTheme.typography.titleMedium)
         Text(
-            "Добавьте плитку «Диспетчер Bruce» в шторку. На защищенном экране телефон сначала попросит разблокировку, затем сразу откроет запись.",
+            "Добавьте плитку «Catching» в шторку. На защищенном экране телефон сначала попросит разблокировку, затем откроет Catching.",
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             style = MaterialTheme.typography.bodySmall,
         )
@@ -134,6 +137,7 @@ private fun SettingSwitch(
     label: String,
     checked: Boolean,
     onCheckedChange: (Boolean) -> Unit,
+    enabled: Boolean = true,
 ) {
     Row(
         modifier = Modifier.fillMaxWidth(),
@@ -141,7 +145,7 @@ private fun SettingSwitch(
         horizontalArrangement = Arrangement.SpaceBetween,
     ) {
         Text(label, modifier = Modifier.weight(1f).padding(end = 12.dp))
-        Switch(checked = checked, onCheckedChange = onCheckedChange)
+        Switch(checked = checked, onCheckedChange = onCheckedChange, enabled = enabled)
     }
 }
 
@@ -167,8 +171,8 @@ private fun AssistantStatus() {
         modifier = Modifier.fillMaxWidth(),
     ) {
         Text(
-            if (active) "Системный статус: Диспетчер Bruce активен"
-            else "Системный статус: Диспетчер Bruce пока не активен",
+            if (active) "Системный статус: Catching активен"
+            else "Системный статус: Catching пока не активен",
             modifier = Modifier.padding(horizontal = 12.dp, vertical = 9.dp),
             style = MaterialTheme.typography.bodyMedium,
         )

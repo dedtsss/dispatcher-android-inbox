@@ -1,39 +1,36 @@
 package ru.bruce.dispatcherinbox.ui.theme
 
-import android.os.Build
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Shapes
 import androidx.compose.material3.darkColorScheme
-import androidx.compose.material3.dynamicDarkColorScheme
-import androidx.compose.material3.dynamicLightColorScheme
-import androidx.compose.material3.lightColorScheme
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.dp
 
-private val LightColors = lightColorScheme(
-    primary = Color(0xFF4058A8),
-    onPrimary = Color.White,
-    primaryContainer = Color(0xFFDCE1FF),
-    surface = Color(0xFFF9F9FC),
-    surfaceVariant = Color(0xFFE3E3E9),
-)
-
-private val DarkColors = darkColorScheme(
-    primary = Color(0xFFB7C4FF),
-    primaryContainer = Color(0xFF293F8B),
-    surface = Color(0xFF121318),
+private val CatchingColors = darkColorScheme(
+    primary = Color(0xFFC4B5E4),
+    onPrimary = Color(0xFF292334),
+    primaryContainer = Color(0xFF393044),
+    onPrimaryContainer = Color(0xFFE7DBFA),
+    secondary = Color(0xFFC7C1D1),
+    secondaryContainer = Color(0xFF302E36),
+    onSecondaryContainer = Color(0xFFE4DFEC),
+    background = Color(0xFF15151A),
+    surface = Color(0xFF1B1B21),
+    surfaceVariant = Color(0xFF292930),
+    surfaceContainer = Color(0xFF222229),
+    onSurface = Color(0xFFF1EDF6),
+    onSurfaceVariant = Color(0xFFCBC5D2),
+    outline = Color(0xFF948D9D),
+    outlineVariant = Color(0xFF45404C),
 )
 
 @Composable
 fun DispatcherInboxTheme(content: @Composable () -> Unit) {
-    val context = LocalContext.current
-    val dark = isSystemInDarkTheme()
-    val colors = when {
-        Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && dark -> dynamicDarkColorScheme(context)
-        Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> dynamicLightColorScheme(context)
-        dark -> DarkColors
-        else -> LightColors
-    }
-    MaterialTheme(colorScheme = colors, content = content)
+    MaterialTheme(
+        colorScheme = CatchingColors,
+        shapes = Shapes(medium = RoundedCornerShape(20.dp), large = RoundedCornerShape(28.dp)),
+        content = content,
+    )
 }
