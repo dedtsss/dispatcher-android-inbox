@@ -49,16 +49,43 @@ class CaptureIntegrationTest {
         assertTrue(work.any { it.state == androidx.work.WorkInfo.State.ENQUEUED })
         assertTrue(work.none { it.state == androidx.work.WorkInfo.State.RUNNING })
 
-        ActivityScenario.launch(MainActivity::class.java).use {
+        ActivityScenario.launch(MainActivity::class.java).use { scenario ->
             assertTrue(device.wait(Until.hasObject(By.text("Голос")), 10000))
+            assertTrue("Capture не получил сохранённое состояние Room", device.wait(
+                Until.hasObject(By.pkg(context.packageName).textContains("Offline оригинал")), 10000))
             screenshot("01-main")
             device.findObject(By.text("Текст")).click()
-            val input = checkNotNull(device.wait(Until.findObject(By.clazz("android.widget.EditText")), 5000)) { "Текстовое поле не открылось" }
-            val uiText = "Текст через интерфейс без сети"
-            input.click()
+            // Поле само получает фокус после появления IME. Общий EditText-селектор
+            // и повторный координатный click могут попасть в узел за пределами viewport.
+            device.waitForIdle()
+            val fields = device.findObjects(By.clazz("android.widget.EditText"))
+            fields.forEach { node -> android.util.Log.i("CatchingInputEvidence",
+                "candidate package=${node.applicationPackage} focused=${node.isFocused} bounds=${node.visibleBounds} text=${node.text}") }
+            inputEvidence("01-before-input")
+            val input = checkNotNull(device.wait(Until.findObject(
+                By.pkg(context.packageName).clazz("android.widget.EditText").focused(true).enabled(true)), 10000)) {
+                "Поле Catching не получило фокус"
+            }
+            var safeTop = 0
+            var keyboardTop = device.displayHeight
+            scenario.onActivity { activity ->
+                val insets = checkNotNull(androidx.core.view.ViewCompat.getRootWindowInsets(activity.window.decorView))
+                safeTop = insets.getInsets(androidx.core.view.WindowInsetsCompat.Type.statusBars()).top
+                keyboardTop -= insets.getInsets(androidx.core.view.WindowInsetsCompat.Type.ime()).bottom
+            }
+            val bounds = input.visibleBounds
+            assertTrue("Поле обрезано статус-баром или IME: $bounds; safe=$safeTop..$keyboardTop",
+                bounds.top >= safeTop && bounds.bottom <= keyboardTop &&
+                    bounds.height() >= (100 * context.resources.displayMetrics.density).toInt())
+            val uiText = "offline-ui-" + System.nanoTime()
+            // ACTION_SET_TEXT направляется актуальному узлу приложения; повторный click не нужен.
             input.text = uiText
+            val accepted = device.wait(Until.hasObject(By.pkg(context.packageName).text(uiText)), 5000)
+            inputEvidence("01-after-input")
+            assertTrue("Поле ввода не приняло текст", accepted)
             device.waitForIdle()
             device.pressBack()
+            assertTrue("Текст исчез после закрытия клавиатуры", device.wait(Until.hasObject(By.text(uiText)), 5000))
             screenshot("01-text-expanded")
             if (!device.hasObject(By.text("Сохранить"))) device.swipe(device.displayWidth - 8, device.displayHeight * 3 / 4, device.displayWidth - 8, device.displayHeight / 3, 30)
             device.findObject(By.text("Сохранить")).click()
@@ -170,7 +197,13 @@ class CaptureIntegrationTest {
             container.dao.getPending().firstOrNull { it.item.text == text }?.let { return it }
             Thread.sleep(100)
         }
-        error("Share не создал локальную запись")
+        error("Оригинал не найден: ${text.take(64)}; записано: ${container.dao.getPending().map { it.item.text?.take(64) }}")
+    }
+    private fun inputEvidence(name: String) {
+        screenshot(name)
+        val dir = File(context.getExternalFilesDir(null), "catching-evidence")
+        device.dumpWindowHierarchy(File(dir, "$name.xml"))
+        File(dir, "$name-window.txt").writeText(device.executeShellCommand("dumpsys window windows"))
     }
     private fun screenshot(name: String) {
         device.waitForIdle()

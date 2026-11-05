@@ -32,6 +32,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.padding
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -196,7 +197,11 @@ private fun InboxApp(
     onRequestQuickSettingsTile: () -> Unit,
 ) {
     val navController = rememberNavController()
-    LaunchedEffect(requestedRoute, navigationRequest) { navController.navigate(requestedRoute) { launchSingleTop = true } }
+    LaunchedEffect(requestedRoute, navigationRequest) {
+        if (navController.currentDestination?.route != requestedRoute) {
+            navController.navigate(requestedRoute) { launchSingleTop = true }
+        }
+    }
     val destinations = listOf(
         Destination("capture", "Записать", Icons.Default.EditNote),
         Destination("queue", "Очередь", Icons.Default.Inbox),
@@ -228,7 +233,7 @@ private fun InboxApp(
         NavHost(
             navController = navController,
             startDestination = "capture",
-            modifier = Modifier.padding(padding),
+            modifier = Modifier.padding(padding).consumeWindowInsets(padding),
         ) {
             composable("capture") {
                 val captureViewModel: CaptureViewModel = viewModel(

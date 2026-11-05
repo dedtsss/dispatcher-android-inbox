@@ -38,7 +38,11 @@ class AssistantIntegrationTest {
         }
         for ((control, target) in listOf("Настройки ассистента" to "Версия и обновления", "Catching" to "Сначала на телефоне · затем в Google Drive")) {
             ActivityScenario.launch<AssistantEntryActivity>(intent).use {
-                assertTrue(device.wait(Until.hasObject(By.desc(control)), 10000))
+                assertTrue("Панель ассистента не открылась", device.wait(Until.hasObject(By.desc("Закрыть ассистент")), 10000))
+                if (control == "Catching" && device.hasObject(By.clazz("android.widget.EditText").focused(true))) {
+                    device.pressBack() // Скрываем клавиатуру перед проверкой заголовка.
+                }
+                assertTrue("Недоступно управление: $control", device.wait(Until.hasObject(By.desc(control)), 10000))
                 device.findObject(By.desc(control)).click()
                 assertTrue(device.wait(Until.hasObject(By.text(target)), 10000))
                 assertFalse(device.hasObject(By.desc("Закрыть ассистент")))

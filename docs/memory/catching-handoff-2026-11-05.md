@@ -1,0 +1,72 @@
+# Catching: контрольная точка 2026-11-05
+
+## Итоговое состояние
+
+**Выпущен проверенный подписанный prerelease [Catching 0.6.4/code10](https://github.com/dedtsss/dispatcher-android-inbox/releases/tag/v0.6.4).** Версия поднята с 0.6.3/code9 из-за изменений приложения. Исходники APK: `2c2e7c372e5ffd1fb7bda3b638096d2daeb5ddff`, tag `v0.6.4`. APK не пересобирался после CI.
+
+[CI 42066190952](https://github.com/dedtsss/dispatcher-android-inbox/actions/runs/42066190952) полностью SUCCESS: unit/lint/build, **7/7** Android-тестов, **1/1** process restart, все пять исторических install-over и отдельный повтор с опубликованной **0.6.2** после process restart. Проверены Room v3, очередь, длительность, Drive checkpoint и оригинальные файлы/хеши. Итоговый установленный пакет — 0.6.4/code10. Screenshot и hierarchy показывают `offline-ui-109524833988` в поле `[53,546][1027,1019]`; тест подтвердил его сохранение через UI в Room. Никакие проверки успешности не заменялись заглушками.
+
+APK SHA-256: `2cda0f95b20c43d18a711ab952a7283e038aed128ac26518a8fc1439da0cf9d0`.
+Сертификат SHA-256: `873bc4580e6d0387a37a155f5c6a6adba71d10408f53fd9d1e8834d54045a645`, прежний сертификат 0.6.2. Публичный APK скачан без авторизации, HTTP 200, подпись проверена apksigner, SHA-256 совпал. Все пять release assets (`APK`, `SHA256SUMS`, `certificate.txt`, `oauth-registration.txt`, `update.json`) доступны HTTP 200; файлы совпали с проверенным артефактом.
+
+Публичный [main/updates/update.json](https://raw.githubusercontent.com/dedtsss/dispatcher-android-inbox/main/updates/update.json) переключён на точный опубликованный APK 0.6.4/code10, проверен HTTP 200 и полное совпадение с метаданными APK. Коммит manifest: `ab3e3699b295f4fb69a0648a9cfc2f227aa28d3e`. PR #8 для этого не объединялся.
+
+Доказательства CI: artifact `проверки-на-Android` **13433468571**, `результаты-проверок` **13434622816**, `catching-0.6.4-release` **13433822470**. Android diagnostics хранятся 3 дня для экономии квоты; итоговые APK/хеши/сертификат/параметры OAuth сохранены в prerelease. Локальные доказательства: `/tmp/catching-evidence42066190952`, `/tmp/catching-release42066190952`, `/tmp/catching-public-064.apk`.
+
+После CI добавлен только fallback сценария кэша исторических APK: при недоступности/истечении срока архива выполняется прежняя сборка фиксированных refs, а повреждённый скачанный архив останавливает проверку. Оба пути проверены локальными изолированными заглушками gh/git; bash -n пройден. APK и его исходники при этом не менялись.
+
+**PR #8 остаётся OPEN, не слит. Физическая и Google OAuth приёмка не завершены. APIStatus=8 INTERNAL_ERROR на телефоне не диагностирован, Drive E2E не подтверждён. Ulefone/droidVNC не использовались.**
+
+## История диагностики и контрольные точки
+
+Продолжение Issue #7 / PR #8, ветка `issue-7-drive-inbox`. PR #8 не объединять до физической и Google OAuth приёмки. Второй исполнитель не запущен.
+
+## Исходное состояние
+
+Рабочее дерево было чистым на `dc1e8ee`; выполнен fast-forward до `cfb1aa3923579b4cd80978593f8174928ad8b6f5`. Репозиторий публичный. В `main/updates/update.json` опубликована 0.6.2/code8, SHA-256 `ff15fec3f817711fb18bab5a04d3fa56aee2a2971f0722e008bedd6d99ee0836`. Сертификат SHA-256 `873bc4580e6d0387a37a155f5c6a6adba71d10408f53fd9d1e8834d54045a645`.
+
+Запуск [42037542998](https://github.com/dedtsss/dispatcher-android-inbox/actions/runs/42037542998): подписанная сборка SUCCESS; Android 6/7, ошибка `CaptureIntegrationTest.captureOfflineAndSystemEntries:62`. Исторические install-over, включая опубликованную 0.6.2, прошли; process restart после общего набора ещё не выполнялся из-за его ошибки.
+
+## Наблюдения при диагностике
+
+Артефакт `проверки-на-Android` (13419982968) скачан в `/tmp/catching-run42037542998`; точные APK того запуска — `/tmp/catching-exact42037542998`. В артефакте нет hierarchy или снимка после попытки ввода. `01-main.png` сделан перед открытием поля.
+
+В logcat: кнопка «Текст» нажата в `(320,1014)` в 13:53:06.622, затем показана IME. В 13:53:08.031 UIAutomator кликает выбранное `EditText` в `(540,65)`, в 13:53:08.107 выполняет ACTION_SET_TEXT с ASCII; ожидаемый текст не появляется. Замена Unicode на ASCII причину не устранила. Сообщение `grep -q OK` — следствие ошибки теста, не первопричина.
+
+Для проверки выбранного accessibility node и координат запущено локальное воспроизведение на точном APK. Первый эмулятор завершился при дефиците памяти хоста, второй запущен с меньшей памятью. Физический телефон не использовался.
+
+## Ограничения выпуска
+
+Если меняются исходники приложения относительно проверяемой 0.6.3/code9, поднять версию до 0.6.4/code10. Изменённый APK не выдавать за прежнюю сборку. Публикация prerelease и переключение manifest разрешены только после полного зелёного device CI, process restart и install-over; SHA-256 и сертификат сверить с точным опубликованным APK.
+
+Draft PR #9 содержит экономию переноса APK между job. Не переносить его устаревшие файлы приложения поверх PR #8. Drive OAuth `APIStatus=8 INTERNAL_ERROR` не диагностирован; Drive E2E не подтверждён.
+
+## Подготовленная проверка причины
+
+В тесте ввод теперь направлен свежему `EditText` пакета Catching с подтверждённым фокусом; повторный координатный click убран. До и после ввода сохраняются screenshot и hierarchy, а список кандидатов EditText (package/focus/bounds/text) попадает в logcat. Проверки видимого текста после ACTION_SET_TEXT, после закрытия IME и сохранения в Room оставлены. Это пока проверяемая гипотеза о сбое автоматизации, не окончательное доказательство причины.
+
+Из PR #9 перенесён только workflow с общей рабочей областью build/device; app-файлы PR #9 не переносились. Исторические APK берутся из run 42037542998 с прежними проверками source/SHA-256 вместо пяти повторных сборок. Обычный запуск не загружает дубликаты APK transport/history в artifacts; diagnostics — 3 дня. После process restart добавлен отдельный повтор install-over опубликованной 0.6.2. Исходники приложения пока совпадают с `cfb1aa3`, версия остаётся 0.6.3/code9.
+
+Локальная проверка: 31 unit-тест, 0 failures; lintDebug — 0 ошибок, 41 предупреждение и 1 подсказка; assembleDebug — успешно. На хосте с заполненным swap процесс Gradle остановлен после этих проверок; оставшийся assembleDebugAndroidTest выполнен отдельным процессом с Xmx512m и успешно завершён за 40 секунд. YAML, bash-сценарий install-over и 14 встроенных shell-шагов workflow проверены синтаксически, git diff --check пройден. Контрольная точка в PR: https://github.com/dedtsss/dispatcher-android-inbox/pull/8#issuecomment-6661794883 .
+
+## Уточнённая причина и исправление 0.6.4/code10
+
+[Диагностический run 42054956393](https://github.com/dedtsss/dispatcher-android-inbox/actions/runs/42054956393) снова дал 6/7. Гипотеза, что достаточно сфокусировать правильный узел в тесте, **не подтвердилась**. Его артефакт скачан в `/tmp/catching-evidence42054956393`.
+
+`01-before-input.xml` и `01-after-input.xml` содержат единственный EditText пакета `ru.bruce.dispatcherinbox`, focused=true, enabled=true, bounds `[53,0][1027,131]`, text пуст до и после ACTION_SET_TEXT. На обоих screenshots видна лишь нижняя часть рамки у статус-бара; основная область поля и остальной контент уехали вверх при появлении IME. Это дефект обработки окна/viewport полноэкранного Capture, не Unicode, не чужой узел и не grep.
+
+В MainActivity не задан windowSoftInputMode, а Compose самостоятельно обрабатывает IME через imePadding и прокрутку поля; родительский Scaffold padding применён без consumeWindowInsets. Исправление явно выбирает `adjustResize` для MainActivity и потребляет уже применённые inset-поля Scaffold перед дочерним Capture. [Документация Android по insets](https://developer.android.com/develop/ui/compose/system/insets-ui), [Scaffold и consumeWindowInsets](https://developer.android.com/develop/ui/compose/system/material-insets).
+
+Поскольку меняется приложение, версия поднята до **0.6.4/code10**. Тест дополнительно проверяет, что поле полностью находится ниже status bar и выше IME, а видимая высота составляет хотя бы 100dp. В доказательства добавляется dumpsys window в момент ввода. Проверки видимого текста и реального сохранения сохранены. До зелёного CI этот APK не публикуется и manifest не меняется.
+
+Локально для 0.6.4: unit — 31/31; lintDebug — 0 ошибок; assembleDebug и assembleDebugAndroidTest — успешно. Первый packageDebug завершился без детальной причины, повтор со stacktrace успешно завершил оба APK за 51 секунду без изменения кода. YAML/bash и git diff --check пройдены. Уточнение причины опубликовано в PR: https://github.com/dedtsss/dispatcher-android-inbox/pull/8#issuecomment-6662163014 .
+
+## Первопричина отсутствия текста: Navigation 2.9.0 singleTop
+
+[Run 42057457467](https://github.com/dedtsss/dispatcher-android-inbox/actions/runs/42057457467) подтвердил исправление viewport: поле теперь `[53,546][1027,1019]`, проверка геометрии прошла. Однако набор снова 6/7: текст остаётся пустым. Значит, прежнее смещение окна было отдельным дефектом и не объясняло полностью отсутствие ввода.
+
+В исходниках обнаружено: после создания NavHost MainActivity безусловно выполняет `navigate("capture") { launchSingleTop = true }` на уже открытый capture. Приложение использует Navigation 2.9.0. [Официальные release notes 2.9.1](https://developer.android.com/jetpack/androidx/releases/navigation#2.9.1) прямо описывают исправление NavEntry, созданных singleTop и остающихся в `CREATED` (b/421095236). Это объясняет и пустой журнал при наличии записи Room, и отсутствие обновления управляемого текста: collectAsStateWithLifecycle не запускает сбор при CREATED. В самостоятельной Assistant Activity навигационного entry нет, и ввод в том же компоненте работает.
+
+Исправление: точечное обновление navigation-compose до 2.9.1 и пропуск navigate, когда текущий route уже совпадает с requestedRoute. Счётчик повторных команд logo/gear сохранён; переход с другой вкладки продолжает выполняться. Регрессия теперь сначала требует отображения ранее сохранённого оригинала Room в Capture, затем проверяет геометрию, ввод, закрытие IME и фактическое сохранение. Версия рабочего, ещё не опубликованного исправления остаётся 0.6.4/code10.
+
+Окончательная локальная проверка Navigation 2.9.1: unit — 31/31; lintDebug — успешно, 0 ошибок; assembleDebug и assembleDebugAndroidTest — успешно. На перегруженном хосте проверки разделены: lint отдельным процессом, D8 со heap 1024 МБ, затем упаковка APK; ошибки нехватки памяти устранены без изменения проверок. git diff --check пройден. Контрольная точка первопричины в PR: https://github.com/dedtsss/dispatcher-android-inbox/pull/8#issuecomment-6662561938 .

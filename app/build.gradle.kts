@@ -20,9 +20,10 @@ android {
         applicationId = "ru.bruce.dispatcherinbox"
         minSdk = 26
         targetSdk = 36
-        versionCode = 9
-        versionName = "0.6.3"
-        val updateUrl = providers.gradleProperty("updateManifestUrl").orElse("").get()
+        versionCode = 10
+        versionName = "0.6.4"
+        val suppliedUpdateUrl = providers.gradleProperty("updateManifestUrl").orNull.orEmpty().trim()
+        val updateUrl = suppliedUpdateUrl.ifBlank { "https://raw.githubusercontent.com/dedtsss/dispatcher-android-inbox/main/updates/update.json" }
         if (updateUrl.isNotEmpty()) {
             val uri = URI(updateUrl)
             require(uri.scheme == "https" && !uri.host.isNullOrBlank() && uri.rawUserInfo == null && uri.fragment == null)
@@ -97,7 +98,7 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.9.1")
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.9.1")
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.9.1")
-    implementation("androidx.navigation:navigation-compose:2.9.0")
+    implementation("androidx.navigation:navigation-compose:2.9.1")
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.ui:ui-tooling-preview")
     implementation("androidx.compose.material3:material3")
