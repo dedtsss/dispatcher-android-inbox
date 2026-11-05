@@ -3,8 +3,7 @@ set -euo pipefail
 # Не меняем исторические модели и Room: БД создаёт настоящий старый код.
 mkdir -p history-apk
 # При изменении только текущего приложения можно повторно взять неизменённые подписанные фикстуры.
-if [ -n "${HISTORY_RUN_ID:-}" ]; then
-  gh run download "$HISTORY_RUN_ID" --repo dedtsss/dispatcher-android-inbox -n исторические-APK -D history-apk
+if [ -n "${HISTORY_RUN_ID:-}" ] && gh run download "$HISTORY_RUN_ID" --repo dedtsss/dispatcher-android-inbox -n исторические-APK -D history-apk; then
   for entry in v1:2c42012c9ba655f74699bf9b7928b5f75c20b006 v2:7f7dbc7c9bc39d69a65baa74a6f51f4ae813c10d v060:87b95fe7a172d56702e48410febd7c7a2c601765 v061:f048ee469b8267500800daf8a629bee0c70cd38a v062:5a71a6c3ad7e31e5e971f792e12d29f5e73f7de9; do
     label=${entry%%:*}
     ref=${entry#*:}
@@ -16,6 +15,9 @@ if [ -n "${HISTORY_RUN_ID:-}" ]; then
   echo 'a0c6c6e6dd822484efd690bda6e6a9bf58632ad6250fd6da1b943492d6611aa1  history-apk/v061/app-release.apk' | sha256sum -c -
   echo 'ff15fec3f817711fb18bab5a04d3fa56aee2a2971f0722e008bedd6d99ee0836  history-apk/v062/app-release.apk' | sha256sum -c -
   exit 0
+fi
+if [ -n "${HISTORY_RUN_ID:-}" ]; then
+  echo 'Архив исторических APK недоступен; собираем прежние фиксированные версии заново'
 fi
 for entry in v1:2c42012c9ba655f74699bf9b7928b5f75c20b006 v2:7f7dbc7c9bc39d69a65baa74a6f51f4ae813c10d v060:87b95fe7a172d56702e48410febd7c7a2c601765 v061:f048ee469b8267500800daf8a629bee0c70cd38a v062:5a71a6c3ad7e31e5e971f792e12d29f5e73f7de9; do
   label=${entry%%:*}

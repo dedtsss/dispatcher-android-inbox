@@ -1,5 +1,24 @@
 # Catching: контрольная точка 2026-11-05
 
+## Итоговое состояние
+
+**Выпущен проверенный подписанный prerelease [Catching 0.6.4/code10](https://github.com/dedtsss/dispatcher-android-inbox/releases/tag/v0.6.4).** Версия поднята с 0.6.3/code9 из-за изменений приложения. Исходники APK: `2c2e7c372e5ffd1fb7bda3b638096d2daeb5ddff`, tag `v0.6.4`. APK не пересобирался после CI.
+
+[CI 42066190952](https://github.com/dedtsss/dispatcher-android-inbox/actions/runs/42066190952) полностью SUCCESS: unit/lint/build, **7/7** Android-тестов, **1/1** process restart, все пять исторических install-over и отдельный повтор с опубликованной **0.6.2** после process restart. Проверены Room v3, очередь, длительность, Drive checkpoint и оригинальные файлы/хеши. Итоговый установленный пакет — 0.6.4/code10. Screenshot и hierarchy показывают `offline-ui-109524833988` в поле `[53,546][1027,1019]`; тест подтвердил его сохранение через UI в Room. Никакие проверки успешности не заменялись заглушками.
+
+APK SHA-256: `2cda0f95b20c43d18a711ab952a7283e038aed128ac26518a8fc1439da0cf9d0`.
+Сертификат SHA-256: `873bc4580e6d0387a37a155f5c6a6adba71d10408f53fd9d1e8834d54045a645`, прежний сертификат 0.6.2. Публичный APK скачан без авторизации, HTTP 200, подпись проверена apksigner, SHA-256 совпал. Все пять release assets (`APK`, `SHA256SUMS`, `certificate.txt`, `oauth-registration.txt`, `update.json`) доступны HTTP 200; файлы совпали с проверенным артефактом.
+
+Публичный [main/updates/update.json](https://raw.githubusercontent.com/dedtsss/dispatcher-android-inbox/main/updates/update.json) переключён на точный опубликованный APK 0.6.4/code10, проверен HTTP 200 и полное совпадение с метаданными APK. Коммит manifest: `ab3e3699b295f4fb69a0648a9cfc2f227aa28d3e`. PR #8 для этого не объединялся.
+
+Доказательства CI: artifact `проверки-на-Android` **13433468571**, `результаты-проверок` **13434622816**, `catching-0.6.4-release` **13433822470**. Android diagnostics хранятся 3 дня для экономии квоты; итоговые APK/хеши/сертификат/параметры OAuth сохранены в prerelease. Локальные доказательства: `/tmp/catching-evidence42066190952`, `/tmp/catching-release42066190952`, `/tmp/catching-public-064.apk`.
+
+После CI добавлен только fallback сценария кэша исторических APK: при недоступности/истечении срока архива выполняется прежняя сборка фиксированных refs, а повреждённый скачанный архив останавливает проверку. Оба пути проверены локальными изолированными заглушками gh/git; bash -n пройден. APK и его исходники при этом не менялись.
+
+**PR #8 остаётся OPEN, не слит. Физическая и Google OAuth приёмка не завершены. APIStatus=8 INTERNAL_ERROR на телефоне не диагностирован, Drive E2E не подтверждён. Ulefone/droidVNC не использовались.**
+
+## История диагностики и контрольные точки
+
 Продолжение Issue #7 / PR #8, ветка `issue-7-drive-inbox`. PR #8 не объединять до физической и Google OAuth приёмки. Второй исполнитель не запущен.
 
 ## Исходное состояние
