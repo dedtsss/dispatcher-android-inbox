@@ -15,15 +15,20 @@ on:
         required: false
         default: ""
         type: string
+      preserve_device_artifacts:
+        description: Необязательно — сохранить архивы device-проверки на 1 день для повторного запуска
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: read
   actions: read
 
 jobs:
-  build:
+  build-and-device:
     if: inputs.apk_run_id == ''
-    name: Тесты и подписанный release APK
+    name: Тесты, подписанный release APK и Android device QA
     runs-on: ubuntu-latest
     steps:
       - name: Получить исходники
@@ -67,12 +72,6 @@ jobs:
           DISPATCHER_SIGNING_KEY_ALIAS: ${{ secrets.DISPATCHER_SIGNING_KEY_ALIAS }}
           DISPATCHER_SIGNING_KEY_PASSWORD: ${{ secrets.DISPATCHER_SIGNING_KEY_PASSWORD }}
         run: scripts/upgrade/build-history.sh
-      - name: Сохранить исторические APK и происхождение
-        uses: actions/upload-artifact@v4
-        with:
-          name: исторические-APK
-          path: history-apk/
-          retention-days: 30
       - name: Проверить подпись и сохранить параметры OAuth
         run: |
           mkdir -p release
@@ -92,6 +91,10 @@ jobs:
         env:
           UPDATE_APK_URL: ${{ vars.UPDATE_APK_URL }}
         run: python3 scripts/update/generate-manifest.py --apk release/catching-0.6.3-release.apk --apk-url "$UPDATE_APK_URL" --build-tools "$ANDROID_HOME/build-tools/35.0.0" --output release/update.json
+      - name: Ограничить размер подписанного release artifact
+        run: |
+          bytes=$(du -sb release | cut -f1)
+          test "$bytes" -le $((50 * 1024 * 1024)) || { echo "Release artifact exceeds 50 MiB: $bytes bytes"; exit 1; }
       - name: Опубликовать точный release APK
         uses: actions/upload-artifact@v4
         with:
@@ -99,52 +102,18 @@ jobs:
           path: release/
           if-no-files-found: error
           retention-days: 30
-      - name: Опубликовать результаты проверок
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: результаты-проверок
-          path: |
-            app/build/test-results/
-            app/build/reports/
-          retention-days: 30
-      - name: Опубликовать APK для проверки на эмуляторе
-        uses: actions/upload-artifact@v4
-        with:
-          name: проверка-на-устройстве
-          path: |
-            app/build/outputs/apk/release/*.apk
-            app/build/outputs/apk/debug/*.apk
-            app/build/outputs/apk/androidTest/debug/*.apk
-          retention-days: 1
-  device:
-    name: Локальное сохранение, Share и системный ассистент на Android
-    needs: build
-    if: always() && (needs.build.result == 'success' || inputs.apk_run_id != '')
-    runs-on: ubuntu-latest
-    steps:
-      - name: Получить сценарии обновления
-        uses: actions/checkout@v4
-      - name: Получить исторические APK
-        uses: actions/download-artifact@v4
-        with:
-          name: исторические-APK
-          path: history-apk
-          run-id: ${{ inputs.apk_run_id || github.run_id }}
-          github-token: ${{ github.token }}
-      - name: Получить APK
-        uses: actions/download-artifact@v4
-        with:
-          name: проверка-на-устройстве
-          path: apk
-          run-id: ${{ inputs.apk_run_id || github.run_id }}
-          github-token: ${{ github.token }}
+      - name: Подготовить APK в общей рабочей области для device QA
+        run: |
+          mkdir -p apk/debug apk/release apk/androidTest/debug
+          cp app/build/outputs/apk/debug/app-debug.apk apk/debug/
+          cp app/build/outputs/apk/release/app-release.apk apk/release/
+          cp app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk apk/androidTest/debug/
       - name: Разрешить KVM
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
-      - name: Проверить локальное сохранение и системные входы
+      - name: Проверить upgrade, Share, recovery и системный ассистент на Android
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 35
@@ -172,8 +141,37 @@ jobs:
             adb install -r apk/release/app-release.apk
             adb shell am start -n ru.bruce.dispatcherinbox/.MainActivity
             adb shell dumpsys package ru.bruce.dispatcherinbox > installed-package.txt
-      - name: Опубликовать проверки и снимки экрана
+      - name: Ограничить размер device QA evidence
+        id: device-evidence-budget
         if: always()
+        run: |
+          bytes=0
+          for path in upgrade-evidence instrumentation.txt restart.txt logcat.txt exit-info.txt processes.txt windows.txt installed-package.txt evidence; do
+            [ ! -e "$path" ] || bytes=$((bytes + $(du -sb "$path" | cut -f1)))
+          done
+          test "$bytes" -le $((50 * 1024 * 1024)) || { echo "Device QA evidence exceeds 50 MiB: $bytes bytes"; exit 1; }
+          echo 'ok=true' >> "$GITHUB_OUTPUT"
+      - name: Ограничить размер unit-test reports
+        id: unit-reports-budget
+        if: always()
+        run: |
+          bytes=0
+          for path in app/build/test-results app/build/reports; do
+            [ ! -e "$path" ] || bytes=$((bytes + $(du -sb "$path" | cut -f1)))
+          done
+          test "$bytes" -le $((20 * 1024 * 1024)) || { echo "Unit-test reports exceed 20 MiB: $bytes bytes"; exit 1; }
+          echo 'ok=true' >> "$GITHUB_OUTPUT"
+      - name: Сохранить результаты проверок
+        if: always() && steps.unit-reports-budget.outputs.ok == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: результаты-проверок
+          path: |
+            app/build/test-results/
+            app/build/reports/
+          retention-days: 3
+      - name: Сохранить Android device evidence
+        if: always() && steps.device-evidence-budget.outputs.ok == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: проверки-на-Android
@@ -187,4 +185,106 @@ jobs:
             windows.txt
             installed-package.txt
             evidence/
-          retention-days: 30
+          retention-days: 3
+      - name: Ограничить суммарный размер APK для cross-runner replay
+        if: inputs.preserve_device_artifacts
+        run: |
+          bytes=$(du -sb app/build/outputs/apk history-apk | awk '{sum += $1} END {print sum}')
+          test "$bytes" -le $((150 * 1024 * 1024)) || { echo "Replay artifacts exceed 150 MiB: $bytes bytes"; exit 1; }
+      - name: Сохранить APK для cross-runner replay по запросу
+        if: inputs.preserve_device_artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: проверка-на-устройстве
+          path: |
+            app/build/outputs/apk/release/*.apk
+            app/build/outputs/apk/debug/*.apk
+            app/build/outputs/apk/androidTest/debug/*.apk
+          retention-days: 1
+      - name: Сохранить исторические APK для cross-runner replay по запросу
+        if: inputs.preserve_device_artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: исторические-APK
+          path: history-apk/
+          retention-days: 1
+  device-replay:
+    name: Локальное сохранение, Share и системный ассистент на Android
+    if: inputs.apk_run_id != ''
+    runs-on: ubuntu-latest
+    steps:
+      - name: Получить сценарии обновления
+        uses: actions/checkout@v4
+      - name: Получить исторические APK
+        uses: actions/download-artifact@v4
+        with:
+          name: исторические-APK
+          path: history-apk
+          run-id: ${{ inputs.apk_run_id || github.run_id }}
+          github-token: ${{ github.token }}
+      - name: Получить APK
+        uses: actions/download-artifact@v4
+        with:
+          name: проверка-на-устройстве
+          path: apk
+          run-id: ${{ inputs.apk_run_id || github.run_id }}
+          github-token: ${{ github.token }}
+      - name: Разрешить KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Повторить device QA по exact run ID
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          arch: x86_64
+          profile: pixel_2
+          script: |
+            scripts/upgrade/install-over.sh
+            adb install -r apk/debug/app-debug.apk
+            adb install -r apk/androidTest/debug/app-debug-androidTest.apk
+            adb shell pm grant ru.bruce.dispatcherinbox android.permission.RECORD_AUDIO
+            adb shell svc wifi disable
+            adb shell svc data disable
+            timeout 240s adb shell am instrument -w -e class ru.bruce.dispatcherinbox.CaptureIntegrationTest,ru.bruce.dispatcherinbox.AssistantIntegrationTest,ru.bruce.dispatcherinbox.UpdateRecoveryTest ru.bruce.dispatcherinbox.test/androidx.test.runner.AndroidJUnitRunner | tee instrumentation.txt
+            adb logcat -d > logcat.txt
+            adb shell dumpsys activity exit-info ru.bruce.dispatcherinbox > exit-info.txt
+            adb shell dumpsys activity processes > processes.txt
+            adb shell dumpsys window > windows.txt
+            adb pull /sdcard/Android/data/ru.bruce.dispatcherinbox/files/catching-evidence ./evidence || true
+            grep -q 'OK (' instrumentation.txt
+            adb shell am force-stop ru.bruce.dispatcherinbox
+            timeout 240s adb shell am instrument -w -e class ru.bruce.dispatcherinbox.ProcessRestartTest ru.bruce.dispatcherinbox.test/androidx.test.runner.AndroidJUnitRunner | tee restart.txt
+            adb logcat -d > logcat.txt
+            adb pull /sdcard/Android/data/ru.bruce.dispatcherinbox/files/catching-evidence ./evidence || true
+            grep -q 'OK (' restart.txt
+            adb install -r apk/release/app-release.apk
+            adb shell am start -n ru.bruce.dispatcherinbox/.MainActivity
+            adb shell dumpsys package ru.bruce.dispatcherinbox > installed-package.txt
+      - name: Ограничить размер сохранённых replay evidence
+        id: replay-evidence-budget
+        if: always()
+        run: |
+          bytes=0
+          for path in upgrade-evidence instrumentation.txt restart.txt logcat.txt exit-info.txt processes.txt windows.txt installed-package.txt evidence; do
+            [ ! -e "$path" ] || bytes=$((bytes + $(du -sb "$path" | cut -f1)))
+          done
+          test "$bytes" -le $((50 * 1024 * 1024)) || { echo "Replay evidence exceeds 50 MiB: $bytes bytes"; exit 1; }
+          echo 'ok=true' >> "$GITHUB_OUTPUT"
+      - name: Сохранить проверки и снимки экрана
+        if: always() && steps.replay-evidence-budget.outputs.ok == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: проверки-на-Android
+          path: |
+            upgrade-evidence/
+            instrumentation.txt
+            restart.txt
+            logcat.txt
+            exit-info.txt
+            processes.txt
+            windows.txt
+            installed-package.txt
+            evidence/
+          retention-days: 3
