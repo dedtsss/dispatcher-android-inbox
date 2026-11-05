@@ -22,7 +22,8 @@ android {
         targetSdk = 36
         versionCode = 9
         versionName = "0.6.3"
-        val updateUrl = providers.gradleProperty("updateManifestUrl").orElse("").get()
+        val suppliedUpdateUrl = providers.gradleProperty("updateManifestUrl").orNull.orEmpty().trim()
+        val updateUrl = suppliedUpdateUrl.ifBlank { "https://raw.githubusercontent.com/dedtsss/dispatcher-android-inbox/main/updates/update.json" }
         if (updateUrl.isNotEmpty()) {
             val uri = URI(updateUrl)
             require(uri.scheme == "https" && !uri.host.isNullOrBlank() && uri.rawUserInfo == null && uri.fragment == null)
