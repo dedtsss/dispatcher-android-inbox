@@ -72,6 +72,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -150,10 +152,11 @@ fun CaptureScreen(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Image(
-                painterResource(R.drawable.catching_logo), contentDescription = "Catching",
+                painterResource(R.drawable.catching_logo), contentDescription = if (compact) null else "Catching",
                 contentScale = androidx.compose.ui.layout.ContentScale.Fit,
                 modifier = Modifier.weight(1f).fillMaxHeight()
-                    .then(if (compact) Modifier.clickable(onClick = onOpenApp) else Modifier),
+                    .then(if (compact) Modifier.clickable(onClick = onOpenApp)
+                        .semantics { contentDescription = "Catching" } else Modifier),
             )
             if (compact) {
                 IconButton(onClick = onClose) { Icon(Icons.Default.Close, "Закрыть ассистент") }

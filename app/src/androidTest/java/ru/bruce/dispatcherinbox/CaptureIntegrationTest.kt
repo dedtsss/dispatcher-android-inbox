@@ -54,11 +54,15 @@ class CaptureIntegrationTest {
             screenshot("01-main")
             device.findObject(By.text("Текст")).click()
             val input = checkNotNull(device.wait(Until.findObject(By.clazz("android.widget.EditText")), 5000)) { "Текстовое поле не открылось" }
-            val uiText = "Текст через интерфейс без сети"
+            // UIAutomator на эмуляторе может не передать кириллицу через ACTION_SET_TEXT.
+            // Кириллический оригинал выше уже отдельно проверен на уровне Room.
+            val uiText = "offline-ui-" + System.nanoTime()
             input.click()
             input.text = uiText
+            assertTrue("Поле ввода не приняло текст", device.wait(Until.hasObject(By.text(uiText)), 5000))
             device.waitForIdle()
             device.pressBack()
+            assertTrue("Текст исчез после закрытия клавиатуры", device.wait(Until.hasObject(By.text(uiText)), 5000))
             screenshot("01-text-expanded")
             if (!device.hasObject(By.text("Сохранить"))) device.swipe(device.displayWidth - 8, device.displayHeight * 3 / 4, device.displayWidth - 8, device.displayHeight / 3, 30)
             device.findObject(By.text("Сохранить")).click()
@@ -170,7 +174,7 @@ class CaptureIntegrationTest {
             container.dao.getPending().firstOrNull { it.item.text == text }?.let { return it }
             Thread.sleep(100)
         }
-        error("Share не создал локальную запись")
+        error("Оригинал не найден: ${text.take(64)}; записано: ${container.dao.getPending().map { it.item.text?.take(64) }}")
     }
     private fun screenshot(name: String) {
         device.waitForIdle()
