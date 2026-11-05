@@ -35,6 +35,20 @@ interface InboxDao {
     @Query("SELECT * FROM inbox_items WHERE id = :id LIMIT 1")
     suspend fun getById(id: String): InboxItemWithAttachments?
 
+    @Transaction
+    suspend fun deleteAllExceptSyncing(): List<InboxItemWithAttachments> {
+        val clearable = getClearable()
+        deleteClearable()
+        return clearable
+    }
+
+    @Transaction
+    @Query("SELECT * FROM inbox_items WHERE status != 'syncing'")
+    suspend fun getClearable(): List<InboxItemWithAttachments>
+
+    @Query("DELETE FROM inbox_items WHERE status != 'syncing'")
+    suspend fun deleteClearable()
+
     @Query(
         """
         UPDATE inbox_items

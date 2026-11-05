@@ -33,4 +33,26 @@ class PayloadSerializerTest {
         assertEquals("android", json["metadata"].asJsonObject["platform"].asString)
         assertEquals("0.1-test", json["metadata"].asJsonObject["appVersion"].asString)
     }
+
+    @Test
+    fun `mixed payload preserves text`() {
+        val item = InboxItemEntity(
+            id = "mixed-1",
+            type = InboxType.MIXED,
+            text = "Текст с фотографией",
+            createdAt = 0L,
+            updatedAt = 0L,
+            status = InboxStatus.QUEUED,
+            source = InboxSource.MANUAL,
+            retryCount = 0,
+            lastError = null,
+            remoteId = null,
+        )
+        val serializer = PayloadSerializer()
+
+        val json = JsonParser.parseString(serializer.serialize(serializer.from(item, "test"))).asJsonObject
+
+        assertEquals("mixed", json["type"].asString)
+        assertEquals("Текст с фотографией", json["text"].asString)
+    }
 }
