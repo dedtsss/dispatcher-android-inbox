@@ -197,7 +197,11 @@ private fun InboxApp(
     onRequestQuickSettingsTile: () -> Unit,
 ) {
     val navController = rememberNavController()
-    LaunchedEffect(requestedRoute, navigationRequest) { navController.navigate(requestedRoute) { launchSingleTop = true } }
+    LaunchedEffect(requestedRoute, navigationRequest) {
+        if (navController.currentDestination?.route != requestedRoute) {
+            navController.navigate(requestedRoute) { launchSingleTop = true }
+        }
+    }
     val destinations = listOf(
         Destination("capture", "Записать", Icons.Default.EditNote),
         Destination("queue", "Очередь", Icons.Default.Inbox),
