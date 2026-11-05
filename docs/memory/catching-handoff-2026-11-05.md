@@ -29,3 +29,15 @@ Draft PR #9 содержит экономию переноса APK между jo
 Из PR #9 перенесён только workflow с общей рабочей областью build/device; app-файлы PR #9 не переносились. Исторические APK берутся из run 42037542998 с прежними проверками source/SHA-256 вместо пяти повторных сборок. Обычный запуск не загружает дубликаты APK transport/history в artifacts; diagnostics — 3 дня. После process restart добавлен отдельный повтор install-over опубликованной 0.6.2. Исходники приложения пока совпадают с `cfb1aa3`, версия остаётся 0.6.3/code9.
 
 Локальная проверка: 31 unit-тест, 0 failures; lintDebug — 0 ошибок, 41 предупреждение и 1 подсказка; assembleDebug — успешно. На хосте с заполненным swap процесс Gradle остановлен после этих проверок; оставшийся assembleDebugAndroidTest выполнен отдельным процессом с Xmx512m и успешно завершён за 40 секунд. YAML, bash-сценарий install-over и 14 встроенных shell-шагов workflow проверены синтаксически, git diff --check пройден. Контрольная точка в PR: https://github.com/dedtsss/dispatcher-android-inbox/pull/8#issuecomment-6661794883 .
+
+## Уточнённая причина и исправление 0.6.4/code10
+
+[Диагностический run 42054956393](https://github.com/dedtsss/dispatcher-android-inbox/actions/runs/42054956393) снова дал 6/7. Гипотеза, что достаточно сфокусировать правильный узел в тесте, **не подтвердилась**. Его артефакт скачан в `/tmp/catching-evidence42054956393`.
+
+`01-before-input.xml` и `01-after-input.xml` содержат единственный EditText пакета `ru.bruce.dispatcherinbox`, focused=true, enabled=true, bounds `[53,0][1027,131]`, text пуст до и после ACTION_SET_TEXT. На обоих screenshots видна лишь нижняя часть рамки у статус-бара; основная область поля и остальной контент уехали вверх при появлении IME. Это дефект обработки окна/viewport полноэкранного Capture, не Unicode, не чужой узел и не grep.
+
+В MainActivity не задан windowSoftInputMode, а Compose самостоятельно обрабатывает IME через imePadding и прокрутку поля; родительский Scaffold padding применён без consumeWindowInsets. Исправление явно выбирает `adjustResize` для MainActivity и потребляет уже применённые inset-поля Scaffold перед дочерним Capture. [Документация Android по insets](https://developer.android.com/develop/ui/compose/system/insets-ui), [Scaffold и consumeWindowInsets](https://developer.android.com/develop/ui/compose/system/material-insets).
+
+Поскольку меняется приложение, версия поднята до **0.6.4/code10**. Тест дополнительно проверяет, что поле полностью находится ниже status bar и выше IME, а видимая высота составляет хотя бы 100dp. В доказательства добавляется dumpsys window в момент ввода. Проверки видимого текста и реального сохранения сохранены. До зелёного CI этот APK не публикуется и manifest не меняется.
+
+Локально для 0.6.4: unit — 31/31; lintDebug — 0 ошибок; assembleDebug и assembleDebugAndroidTest — успешно. Первый packageDebug завершился без детальной причины, повтор со stacktrace успешно завершил оба APK за 51 секунду без изменения кода. YAML/bash и git diff --check пройдены. Уточнение причины опубликовано в PR: https://github.com/dedtsss/dispatcher-android-inbox/pull/8#issuecomment-6662163014 .

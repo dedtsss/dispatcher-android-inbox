@@ -49,7 +49,7 @@ class CaptureIntegrationTest {
         assertTrue(work.any { it.state == androidx.work.WorkInfo.State.ENQUEUED })
         assertTrue(work.none { it.state == androidx.work.WorkInfo.State.RUNNING })
 
-        ActivityScenario.launch(MainActivity::class.java).use {
+        ActivityScenario.launch(MainActivity::class.java).use { scenario ->
             assertTrue(device.wait(Until.hasObject(By.text("Голос")), 10000))
             screenshot("01-main")
             device.findObject(By.text("Текст")).click()
@@ -64,6 +64,17 @@ class CaptureIntegrationTest {
                 By.pkg(context.packageName).clazz("android.widget.EditText").focused(true).enabled(true)), 10000)) {
                 "Поле Catching не получило фокус"
             }
+            var safeTop = 0
+            var keyboardTop = device.displayHeight
+            scenario.onActivity { activity ->
+                val insets = checkNotNull(androidx.core.view.ViewCompat.getRootWindowInsets(activity.window.decorView))
+                safeTop = insets.getInsets(androidx.core.view.WindowInsetsCompat.Type.statusBars()).top
+                keyboardTop -= insets.getInsets(androidx.core.view.WindowInsetsCompat.Type.ime()).bottom
+            }
+            val bounds = input.visibleBounds
+            assertTrue("Поле обрезано статус-баром или IME: $bounds; safe=$safeTop..$keyboardTop",
+                bounds.top >= safeTop && bounds.bottom <= keyboardTop &&
+                    bounds.height() >= (100 * context.resources.displayMetrics.density).toInt())
             val uiText = "offline-ui-" + System.nanoTime()
             // ACTION_SET_TEXT направляется актуальному узлу приложения; повторный click не нужен.
             input.text = uiText
@@ -190,6 +201,7 @@ class CaptureIntegrationTest {
         screenshot(name)
         val dir = File(context.getExternalFilesDir(null), "catching-evidence")
         device.dumpWindowHierarchy(File(dir, "$name.xml"))
+        File(dir, "$name-window.txt").writeText(device.executeShellCommand("dumpsys window windows"))
     }
     private fun screenshot(name: String) {
         device.waitForIdle()
