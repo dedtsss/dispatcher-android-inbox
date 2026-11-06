@@ -141,16 +141,8 @@ jobs:
             adb install -r apk/release/app-release.apk
             adb shell am start -n ru.bruce.dispatcherinbox/.MainActivity
             adb shell dumpsys package ru.bruce.dispatcherinbox > installed-package.txt
-      - name: Проверить бюджет перед публикацией подписанного release APK
-        id: release-artifact-budget
-        if: github.event_name == 'workflow_dispatch' && inputs.publish_release_artifact && steps.android-qa.outcome == 'success'
-        continue-on-error: true
-        env:
-          GH_TOKEN: ${{ github.token }}
-          ACTIONS_ARTIFACT_BUDGET_BYTES: '280000000'
-        run: python3 scripts/ci/check_artifact_budget.py release/
       - name: Опубликовать точный release APK
-        if: github.event_name == 'workflow_dispatch' && inputs.publish_release_artifact && steps.android-qa.outcome == 'success' && steps.release-artifact-budget.outcome == 'success'
+        if: github.event_name == 'workflow_dispatch' && inputs.publish_release_artifact && steps.android-qa.outcome == 'success'
         uses: actions/upload-artifact@v4
         with:
           name: catching-0.6.4-release
@@ -177,16 +169,8 @@ jobs:
           done
           test "$bytes" -le $((20 * 1024 * 1024)) || { echo "Отчёты тестов превышают 20 MiB: $bytes bytes"; exit 1; }
           echo 'ok=true' >> "$GITHUB_OUTPUT"
-      - name: Проверить бюджет перед сохранением результатов проверок
-        id: test-reports-artifact-budget
-        if: always() && steps.unit-reports-budget.outputs.ok == 'true'
-        continue-on-error: true
-        env:
-          GH_TOKEN: ${{ github.token }}
-          ACTIONS_ARTIFACT_BUDGET_BYTES: '280000000'
-        run: python3 scripts/ci/check_artifact_budget.py app/build/test-results app/build/reports/
       - name: Сохранить результаты проверок
-        if: always() && steps.unit-reports-budget.outputs.ok == 'true' && steps.test-reports-artifact-budget.outcome == 'success'
+        if: always() && steps.unit-reports-budget.outputs.ok == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: результаты-проверок
@@ -194,16 +178,8 @@ jobs:
             app/build/test-results/
             app/build/reports/
           retention-days: 1
-      - name: Проверить бюджет перед сохранением Android device evidence
-        id: device-evidence-artifact-budget
-        if: always() && steps.device-evidence-budget.outputs.ok == 'true'
-        continue-on-error: true
-        env:
-          GH_TOKEN: ${{ github.token }}
-          ACTIONS_ARTIFACT_BUDGET_BYTES: '280000000'
-        run: python3 scripts/ci/check_artifact_budget.py upgrade-evidence instrumentation.txt restart.txt logcat.txt exit-info.txt processes.txt windows.txt installed-package.txt evidence/
       - name: Сохранить Android device evidence
-        if: always() && steps.device-evidence-budget.outputs.ok == 'true' && steps.device-evidence-artifact-budget.outcome == 'success'
+        if: always() && steps.device-evidence-budget.outputs.ok == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: проверки-на-Android
@@ -223,16 +199,8 @@ jobs:
         run: |
           bytes=$(du -sb app/build/outputs/apk history-apk | awk '{sum += $1} END {print sum}')
           test "$bytes" -le $((150 * 1024 * 1024)) || { echo "Артефакты повтора превышают 150 MiB: $bytes bytes"; exit 1; }
-      - name: Проверить бюджет cross-runner replay APK
-        id: replay-apk-artifact-budget
-        if: inputs.preserve_device_artifacts
-        continue-on-error: true
-        env:
-          GH_TOKEN: ${{ github.token }}
-          ACTIONS_ARTIFACT_BUDGET_BYTES: '280000000'
-        run: python3 scripts/ci/check_artifact_budget.py app/build/outputs/apk history-apk/ --archive-count 2
       - name: Сохранить APK для cross-runner replay по запросу
-        if: inputs.preserve_device_artifacts && steps.replay-apk-artifact-budget.outcome == 'success'
+        if: inputs.preserve_device_artifacts
         uses: actions/upload-artifact@v4
         with:
           name: проверка-на-устройстве
@@ -242,7 +210,7 @@ jobs:
             app/build/outputs/apk/androidTest/debug/*.apk
           retention-days: 1
       - name: Сохранить исторические APK для cross-runner replay по запросу
-        if: inputs.preserve_device_artifacts && steps.replay-apk-artifact-budget.outcome == 'success'
+        if: inputs.preserve_device_artifacts
         uses: actions/upload-artifact@v4
         with:
           name: исторические-APK
@@ -313,16 +281,8 @@ jobs:
           done
           test "$bytes" -le $((50 * 1024 * 1024)) || { echo "Доказательства повтора превышают 50 MiB: $bytes bytes"; exit 1; }
           echo 'ok=true' >> "$GITHUB_OUTPUT"
-      - name: Проверить бюджет доказательств повторной проверки
-        id: replay-evidence-artifact-budget
-        if: always() && steps.replay-evidence-budget.outputs.ok == 'true'
-        continue-on-error: true
-        env:
-          GH_TOKEN: ${{ github.token }}
-          ACTIONS_ARTIFACT_BUDGET_BYTES: '280000000'
-        run: python3 scripts/ci/check_artifact_budget.py upgrade-evidence instrumentation.txt restart.txt logcat.txt exit-info.txt processes.txt windows.txt installed-package.txt evidence/
       - name: Сохранить проверки и снимки экрана
-        if: always() && steps.replay-evidence-budget.outputs.ok == 'true' && steps.replay-evidence-artifact-budget.outcome == 'success'
+        if: always() && steps.replay-evidence-budget.outputs.ok == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: проверки-на-Android
