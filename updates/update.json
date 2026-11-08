@@ -1,8 +1,8 @@
 {
-  "versionCode": 11,
-  "versionName": "0.6.5",
-  "apkUrl": "https://github.com/dedtsss/dispatcher-android-inbox/releases/download/v0.6.5/catching-0.6.5-release.apk",
-  "sha256": "6b11206e9203e4a6ceff7b6b71160ae56186c974cc928ad04e6d691f58383748",
+  "versionCode": 14,
+  "versionName": "0.6.8",
+  "apkUrl": "https://github.com/dedtsss/dispatcher-android-inbox/releases/download/v0.6.8/catching-0.6.8-release.apk",
+  "sha256": "317503dbaed8694f7234586b74038820981d2266f8f88cd79a0419ac941724f8",
   "packageName": "ru.bruce.dispatcherinbox",
   "signerSha256": "873bc4580e6d0387a37a155f5c6a6adba71d10408f53fd9d1e8834d54045a645"
 }
