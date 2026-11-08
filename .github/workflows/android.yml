@@ -5,6 +5,11 @@ on:
     branches: [issue-7-drive-inbox]
   workflow_dispatch:
     inputs:
+      visual_apk_run_id:
+        description: Только снимки точного release APK из успешного CI, без компиляции
+        required: false
+        default: ""
+        type: string
       history_run_id:
         description: Необязательно — взять неизменённые исторические APK из указанного запуска с проверкой SHA-256
         required: false
@@ -32,7 +37,7 @@ permissions:
 
 jobs:
   build-and-device:
-    if: inputs.apk_run_id == ''
+    if: inputs.apk_run_id == '' && inputs.visual_apk_run_id == ''
     name: Тесты, подписанный release APK и Android device QA
     runs-on: ubuntu-latest
     steps:
@@ -350,4 +355,60 @@ jobs:
             windows.txt
             installed-package.txt
             evidence/
+          retention-days: 1
+
+  visual-release:
+    if: inputs.visual_apk_run_id != ''
+    name: Снимки точного проверенного release APK без пересборки
+    runs-on: ubuntu-latest
+    steps:
+      - name: Получить только сценарии проверки
+        uses: actions/checkout@v4
+      - name: Подтвердить успешный исходный CI и exact artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_RUN_ID: ${{ inputs.visual_apk_run_id }}
+        run: |
+          [[ "$SOURCE_RUN_ID" =~ ^[0-9]+$ ]]
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$SOURCE_RUN_ID" > source-run.json
+          python3 -c 'import json; r=json.load(open("source-run.json")); assert r["status"] == "completed" and r["conclusion"] == "success"'
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$SOURCE_RUN_ID/artifacts" > source-artifacts.json
+          python3 - <<'PYTHON'
+          import json, hashlib, subprocess, zipfile
+          from pathlib import Path
+          r=json.load(open('source-run.json'))
+          a=[a for a in json.load(open('source-artifacts.json'))['artifacts'] if a['name']=='catching-0.6.5-release' and not a['expired']]
+          assert len(a)==1
+          a=a[0]
+          with open('exact-release.zip','wb') as f:
+              subprocess.run(['gh','api',f"repos/{r['repository']['full_name']}/actions/artifacts/{a['id']}/zip"],stdout=f,check=True)
+          assert 'sha256:'+hashlib.sha256(Path('exact-release.zip').read_bytes()).hexdigest()==a['digest']
+          with zipfile.ZipFile('exact-release.zip') as z: z.extractall('release')
+          assert Path('release/source-head.txt').read_text().strip()==r['head_sha']
+          subprocess.run(['sha256sum','-c','SHA256SUMS'],cwd='release',check=True)
+          Path('visual').mkdir()
+          Path('visual/provenance.json').write_text(json.dumps(dict(run=r['id'],head=r['head_sha'],artifact=a['id'],digest=a['digest']),indent=2))
+          PYTHON
+      - name: Разрешить KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Получить четыре снимка release на Android
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          arch: x86_64
+          profile: pixel_2
+          script: scripts/ci/visual-release.sh
+      - name: Проверить бюджет снимков
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ACTIONS_ARTIFACT_BUDGET_BYTES: '280000000'
+        run: python3 scripts/ci/check_artifact_budget.py visual/
+      - name: Сохранить компактные визуальные доказательства
+        uses: actions/upload-artifact@v4
+        with:
+          name: снимки-release-0.6.5
+          path: visual/
           retention-days: 1
