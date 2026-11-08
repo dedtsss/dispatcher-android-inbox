@@ -39,6 +39,12 @@ class DriveConnectActivity : ComponentActivity() {
     private val consent = registerForActivityResult(ActivityResultContracts.StartIntentSenderForResult()) { result ->
         model.flow.consentResult(result.resultCode, result.data)
     }
+    private fun restartFlow() {
+        // Новая ActivityResultRegistry отделяет ответы прежнего системного окна от новой попытки.
+        model.flow.cancel()
+        startActivity(android.content.Intent(this, DriveConnectActivity::class.java))
+        finish()
+    }
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
@@ -50,11 +56,14 @@ class DriveConnectActivity : ComponentActivity() {
                         Text(ui.message)
                         Text("1. Выберите аккаунт\n2. Разрешите доступ к файлам Catching\n3. Проверим папку Catching/Inbox")
                         if (ui.phase in setOf(ConnectionPhase.AUTHORIZE, ConnectionPhase.VERIFY)) CircularProgressIndicator()
-                        if (ui.phase in setOf(ConnectionPhase.CONSENT, ConnectionPhase.RESUME) || (ui.phase == ConnectionPhase.PICK_ACCOUNT && ui.externalLaunched)) {
+                        if (ui.phase in setOf(ConnectionPhase.CONSENT, ConnectionPhase.RESUME)) {
                             Button(onClick = model.flow::resume) { Text("Продолжить подключение") }
                         }
+                        if (ui.phase == ConnectionPhase.PICK_ACCOUNT && ui.externalLaunched) {
+                            Button(onClick = ::restartFlow) { Text("Начать выбор заново") }
+                        }
                         if (ui.phase in setOf(ConnectionPhase.ERROR, ConnectionPhase.CANCELED)) {
-                            Button(onClick = model.flow::retry) { Text("Выбрать аккаунт и повторить") }
+                            Button(onClick = ::restartFlow) { Text("Выбрать аккаунт и повторить") }
                             Text("Подробности доступны в настройках: «Диагностика подключения»")
                         }
                         TextButton(onClick = { if (ui.phase != ConnectionPhase.CONNECTED) model.flow.cancel(); finish() }) { Text(if (ui.phase == ConnectionPhase.CONNECTED) "Готово" else "Вернуться к записям") }

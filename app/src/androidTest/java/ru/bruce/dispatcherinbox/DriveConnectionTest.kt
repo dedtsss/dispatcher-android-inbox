@@ -102,6 +102,29 @@ class DriveConnectionTest {
             assertEquals(1, fresh.verified)
         }
     }
+    @Test fun resumingPendingConsentDoesNotLaunchSecondWindow() = runBlocking {
+        fixture { flow, backend, _, _ ->
+            backend.answer = { DriveGrant(emptyList(), null, consent()) }
+            main { flow.accountResult("person@example.test", "com.google", false) }
+            await(flow, ConnectionPhase.CONSENT)
+            main { flow.externalStarted(); flow.resume() }
+            await(flow, ConnectionPhase.CONSENT)
+            assertEquals(2, backend.authorized)
+            assertTrue("Второе consent-окно не должно запускаться", flow.state.value.externalLaunched)
+            main { flow.consentResult(-1, Intent()) }
+            await(flow, ConnectionPhase.CONNECTED)
+            assertEquals(1, backend.verified)
+        }
+    }
+    @Test fun accountPickerAwaitingResultIsNotRelaunchedOnResume() = runBlocking {
+        fixture { flow, backend, _, _ ->
+            main { flow.externalStarted(); flow.resume() }
+            assertEquals(ConnectionPhase.PICK_ACCOUNT, flow.state.value.phase)
+            assertTrue(flow.state.value.externalLaunched)
+            assertEquals(0, backend.authorized)
+        }
+    }
+
     @Test fun interruptedNetworkPhasesRequireFreshTokenOnResume() = runBlocking {
         for (phase in listOf(ConnectionPhase.AUTHORIZE, ConnectionPhase.VERIFY)) {
             fixture { _, backend, _, scope ->

@@ -33,6 +33,7 @@ internal class DriveConnectionFlow(
 ) {
     private var work: Job? = null
     private var revision = 0
+    private var preserveExternalConsent = false
     var pendingConsent: PendingIntent? = null
         private set
     private var account: String
@@ -70,14 +71,16 @@ internal class DriveConnectionFlow(
     }
     fun resume() {
         if (state.value.phase !in setOf(ConnectionPhase.RESUME, ConnectionPhase.CONSENT, ConnectionPhase.PICK_ACCOUNT)) return
-        if (account.isBlank()) retry() else authorize()
+        if (state.value.phase == ConnectionPhase.PICK_ACCOUNT && state.value.externalLaunched) return
+        if (account.isBlank()) retry() else authorize(state.value.phase == ConnectionPhase.CONSENT && state.value.externalLaunched)
     }
     fun cancel() {
         work?.cancel(); revision++; pendingConsent = null
         transition(ConnectionPhase.CANCELED)
     }
     fun launchFailed(error: Exception) { fail(error, state.value.phase.name.lowercase()) }
-    private fun authorize() {
+    private fun authorize(waitingForExistingConsent: Boolean = false) {
+        preserveExternalConsent = waitingForExistingConsent
         pendingConsent = null
         transition(ConnectionPhase.AUTHORIZE)
         execute("authorize") { accept(backend.authorize(account)) }
@@ -98,7 +101,9 @@ internal class DriveConnectionFlow(
         backend.record("authorization_result", "hasResolution=${grant.resolution != null}; hasAccessToken=${!grant.token.isNullOrBlank()}; driveFileGranted=${DriveAuthorization.DRIVE_FILE in grant.scopes}")
         if (grant.resolution != null) {
             pendingConsent = grant.resolution
-            transition(ConnectionPhase.CONSENT)
+            // Проверка кеша во время открытого consent не должна запускать второе системное окно.
+            transition(ConnectionPhase.CONSENT, external = preserveExternalConsent)
+            preserveExternalConsent = false
             return
         }
         check(DriveAuthorization.DRIVE_FILE in grant.scopes && !grant.token.isNullOrBlank())
