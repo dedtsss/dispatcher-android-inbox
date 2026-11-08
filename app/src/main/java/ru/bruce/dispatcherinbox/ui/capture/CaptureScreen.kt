@@ -99,6 +99,9 @@ fun CaptureScreen(
     onOpenSettings: () -> Unit = {},
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val originalLogo = painterResource(R.drawable.catching_logo)
+    val logoTextColor = MaterialTheme.colorScheme.onSurface
+    val transparentLogo = remember(originalLogo, logoTextColor) { CatchingLogoPainter(originalLogo, logoTextColor) }
     val context = LocalContext.current
     var textExpanded by rememberSaveable { mutableStateOf(false) }
     val focusRequester = remember { FocusRequester() }
@@ -154,11 +157,10 @@ fun CaptureScreen(
         ) {
             Box(Modifier.weight(1f), contentAlignment = if (compact) Alignment.CenterStart else Alignment.Center) {
                 Image(
-                    painterResource(R.drawable.catching_logo), contentDescription = "Catching",
+                    transparentLogo, contentDescription = "Catching",
                     contentScale = androidx.compose.ui.layout.ContentScale.Fit,
                     modifier = Modifier.widthIn(max = if (compact) 184.dp else 208.dp)
                         .fillMaxWidth().height(if (compact) 48.dp else 56.dp)
-                        .background(Color.White, RoundedCornerShape(12.dp))
                         .then(if (compact) Modifier.clickable(onClick = onOpenApp) else Modifier)
                         .padding(8.dp),
                 )

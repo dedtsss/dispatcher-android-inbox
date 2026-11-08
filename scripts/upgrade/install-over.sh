@@ -7,7 +7,7 @@ adb shell svc data disable
 sleep 3
 mkdir -p upgrade-evidence
 runner=ru.bruce.dispatcherinbox.test/androidx.test.runner.AndroidJUnitRunner
-for label in ${UPGRADE_LABELS:-v1 v2 v060 v061 v062 v064}; do
+for label in ${UPGRADE_LABELS:-v1 v2 v060 v061 v062 v064 v065}; do
   adb uninstall ru.bruce.dispatcherinbox >/dev/null 2>&1 || true
   adb uninstall ru.bruce.dispatcherinbox.test >/dev/null 2>&1 || true
   adb install history-apk/"$label"/app-debug.apk
@@ -31,8 +31,8 @@ for label in ${UPGRADE_LABELS:-v1 v2 v060 v061 v062 v064}; do
   adb install -r apk/release/app-release.apk
   adb install -r apk/androidTest/debug/app-debug-androidTest.apk
   duration=false; drive=false
-  if [ "$label" = v2 ] || [ "$label" = v061 ] || [ "$label" = v062 ] || [ "$label" = v064 ]; then duration=true; fi
-  if [ "$label" = v060 ] || [ "$label" = v061 ] || [ "$label" = v062 ] || [ "$label" = v064 ]; then drive=true; fi
+  if [ "$label" = v2 ] || [ "$label" = v061 ] || [ "$label" = v062 ] || [ "$label" = v064 ] || [ "$label" = v065 ]; then duration=true; fi
+  if [ "$label" = v060 ] || [ "$label" = v061 ] || [ "$label" = v062 ] || [ "$label" = v064 ] || [ "$label" = v065 ]; then drive=true; fi
   timeout 120s adb shell am instrument -w -e class ru.bruce.dispatcherinbox.MigrationTest -e historicalDuration "$duration" -e historicalDrive "$drive" "$runner" | tee "upgrade-evidence/$label-verify.txt"
   grep -q 'OK (1 test)' "upgrade-evidence/$label-verify.txt"
   adb shell am start -W -n ru.bruce.dispatcherinbox/.MainActivity

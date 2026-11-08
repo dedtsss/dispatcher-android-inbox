@@ -11,6 +11,13 @@ prepare_published_064() {
   echo '2cda0f95b20c43d18a711ab952a7283e038aed128ac26518a8fc1439da0cf9d0  history-apk/v064/app-release.apk' | sha256sum -c -
   "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --print-certs history-apk/v064/app-release.apk > history-apk/v064/certificate.txt
   grep -qi '873bc4580e6d0387a37a155f5c6a6adba71d10408f53fd9d1e8834d54045a645' history-apk/v064/certificate.txt
+  mkdir -p history-apk/v065
+  cp history-apk/v062/app-debug.apk history-apk/v062/app-debug-androidTest.apk history-apk/v065/
+  gh release download v0.6.5 --repo dedtsss/dispatcher-android-inbox --pattern catching-0.6.5-release.apk --dir "$RUNNER_TEMP/original-065" --clobber
+  cp "$RUNNER_TEMP/original-065/catching-0.6.5-release.apk" history-apk/v065/app-release.apk
+  echo '6b11206e9203e4a6ceff7b6b71160ae56186c974cc928ad04e6d691f58383748  history-apk/v065/app-release.apk' | sha256sum -c -
+  "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --print-certs history-apk/v065/app-release.apk > history-apk/v065/certificate.txt
+  grep -qi '873bc4580e6d0387a37a155f5c6a6adba71d10408f53fd9d1e8834d54045a645' history-apk/v065/certificate.txt
 }
 # При изменении только текущего приложения можно повторно взять неизменённые подписанные фикстуры.
 if [ -n "${HISTORY_RUN_ID:-}" ] && gh run download "$HISTORY_RUN_ID" --repo dedtsss/dispatcher-android-inbox -n исторические-APK -D history-apk; then

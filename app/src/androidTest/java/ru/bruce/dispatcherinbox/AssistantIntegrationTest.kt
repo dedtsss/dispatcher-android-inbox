@@ -1,5 +1,7 @@
 package ru.bruce.dispatcherinbox
 
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.asAndroidBitmap
 import android.content.Intent
 import androidx.test.core.app.ActivityScenario
 import androidx.test.platform.app.InstrumentationRegistry
@@ -13,6 +15,40 @@ import ru.bruce.dispatcherinbox.assistant.AssistantEntryActivity
 import java.io.File
 
 class AssistantIntegrationTest {
+    @Test fun logoPreservesOriginalAlphaCatAndAccent() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val original = android.graphics.BitmapFactory.decodeResource(context.resources, ru.bruce.dispatcherinbox.R.drawable.catching_logo)
+        assertEquals(890, original.width)
+        assertEquals(210, original.height)
+        val source = androidx.compose.ui.graphics.painter.BitmapPainter(original.asImageBitmap())
+        fun render(painter: androidx.compose.ui.graphics.painter.Painter): android.graphics.Bitmap {
+            val image = androidx.compose.ui.graphics.ImageBitmap(890, 210)
+            androidx.compose.ui.graphics.drawscope.CanvasDrawScope().draw(
+                androidx.compose.ui.unit.Density(1f), androidx.compose.ui.unit.LayoutDirection.Ltr,
+                androidx.compose.ui.graphics.Canvas(image), androidx.compose.ui.geometry.Size(890f, 210f),
+            ) { with(painter) { draw(size) } }
+            return image.asAndroidBitmap()
+        }
+        val reference = render(source)
+        val result = render(ru.bruce.dispatcherinbox.ui.capture.CatchingLogoPainter(source, androidx.compose.ui.graphics.Color(0xFFF1EDF6)))
+        var transparent = 0
+        var letters = 0
+        for (y in 0 until 210) for (x in 0 until 890) {
+            val before = reference.getPixel(x, y)
+            val after = result.getPixel(x, y)
+            if (android.graphics.Color.alpha(before) != android.graphics.Color.alpha(after)) fail("Изменена прозрачность $x,$y")
+            if (android.graphics.Color.alpha(before) == 0) transparent++
+            if (x < 250 || (x in 680 until 720 && y in 20 until 62)) {
+                if (before != after) fail("Изменён кот или фиолетовый акцент $x,$y")
+            } else if (android.graphics.Color.alpha(before) == 255) {
+                if (after != 0xFFF1EDF6.toInt()) fail("Буква не получила светлый цвет $x,$y")
+                letters++
+            }
+        }
+        assertTrue("Утрачена прозрачная область", transparent > 100000)
+        assertTrue("Не проверены буквы", letters > 10000)
+    }
+
     @Test fun compactOriginalLogoOnBothSurfaces() = runBlocking<Unit> {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val context = instrumentation.targetContext
@@ -28,6 +64,10 @@ class AssistantIntegrationTest {
             device.dumpWindowHierarchy(File(dir, "$name.xml"))
             val logo = device.findObject(By.desc("Catching")).visibleBounds
             val density = context.resources.displayMetrics.density
+            val screenshot = android.graphics.BitmapFactory.decodeFile(File(dir, "$name.png").path)
+            val corner = screenshot.getPixel(logo.left + (4 * density).toInt(), logo.top + (4 * density).toInt())
+            assertTrue("Вокруг логотипа появилась светлая плашка", android.graphics.Color.red(corner) < 60 && android.graphics.Color.green(corner) < 60 && android.graphics.Color.blue(corner) < 60)
+            screenshot.recycle()
             assertTrue("Логотип превышает ограничение ширины: $logo", logo.width() <= (if (compact) 184 else 208) * density + 2)
             // В панели clickable объединяет всю область; у Image главного экрана bounds исключают padding 8dp.
             val expectedHeight = (if (compact) 48 else 40) * density
