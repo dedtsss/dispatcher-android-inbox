@@ -37,6 +37,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
@@ -148,16 +149,20 @@ fun CaptureScreen(
             .padding(horizontal = if (compact) 18.dp else 20.dp, vertical = 14.dp),
     ) {
         Row(
-            modifier = Modifier.fillMaxWidth().height(if (compact) 56.dp else 88.dp),
+            modifier = Modifier.fillMaxWidth().height(if (compact) 56.dp else 64.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Image(
-                painterResource(R.drawable.catching_logo), contentDescription = if (compact) null else "Catching",
-                contentScale = androidx.compose.ui.layout.ContentScale.Fit,
-                modifier = Modifier.weight(1f).fillMaxHeight()
-                    .then(if (compact) Modifier.clickable(onClick = onOpenApp)
-                        .semantics { contentDescription = "Catching" } else Modifier),
-            )
+            Box(Modifier.weight(1f), contentAlignment = if (compact) Alignment.CenterStart else Alignment.Center) {
+                Image(
+                    painterResource(R.drawable.catching_logo), contentDescription = "Catching",
+                    contentScale = androidx.compose.ui.layout.ContentScale.Fit,
+                    modifier = Modifier.widthIn(max = if (compact) 184.dp else 208.dp)
+                        .fillMaxWidth().height(if (compact) 48.dp else 56.dp)
+                        .background(Color.White, RoundedCornerShape(12.dp))
+                        .then(if (compact) Modifier.clickable(onClick = onOpenApp) else Modifier)
+                        .padding(8.dp),
+                )
+            }
             if (compact) {
                 IconButton(onClick = onClose) { Icon(Icons.Default.Close, "Закрыть ассистент") }
                 IconButton(onClick = onOpenSettings) { Icon(Icons.Default.Settings, "Настройки ассистента") }

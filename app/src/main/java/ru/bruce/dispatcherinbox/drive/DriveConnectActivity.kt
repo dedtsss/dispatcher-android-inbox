@@ -40,6 +40,8 @@ class DriveConnectActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         awaitingResolution = savedInstanceState?.getBoolean("awaiting_resolution") ?: false
+        authorizationSummary = savedInstanceState?.getString("authorization_summary").orEmpty()
+        stage = savedInstanceState?.getString("authorization_stage") ?: "authorize"
         if (awaitingResolution) return
         lifecycleScope.launch {
             try {
@@ -62,6 +64,8 @@ class DriveConnectActivity : ComponentActivity() {
 
     override fun onSaveInstanceState(outState: Bundle) {
         outState.putBoolean("awaiting_resolution", awaitingResolution)
+        outState.putString("authorization_summary", authorizationSummary)
+        outState.putString("authorization_stage", stage)
         super.onSaveInstanceState(outState)
     }
 
@@ -98,7 +102,14 @@ class DriveConnectActivity : ComponentActivity() {
             packageManager.getPackageInfo(packageName, android.content.pm.PackageManager.GET_SIGNATURES).signatures?.firstOrNull()?.toByteArray()
         }
         val sha1 = signer?.let { java.security.MessageDigest.getInstance("SHA-1").digest(it).joinToString(":") { b -> "%02X".format(b) } }.orEmpty()
-        val diagnostic = "stage=$stage; resultCode=$activityResultCode; $details\npackage=$packageName; SHA-1=$sha1; scope=${DriveAuthorization.DRIVE_FILE}"
+        val gms = runCatching {
+            @Suppress("DEPRECATION")
+            packageManager.getPackageInfo("com.google.android.gms", 0).versionName
+        }.getOrNull() ?: "unavailable"
+        val availability = com.google.android.gms.common.GoogleApiAvailability.getInstance()
+            .isGooglePlayServicesAvailable(this)
+        val environment = "Android=${android.os.Build.VERSION.SDK_INT}; gmsVersion=$gms; gmsAvailability=$availability; authSdk=21.4.0; app=${ru.bruce.dispatcherinbox.BuildConfig.VERSION_NAME}/${ru.bruce.dispatcherinbox.BuildConfig.VERSION_CODE}"
+        val diagnostic = "stage=$stage; resultCode=$activityResultCode; $details\npackage=$packageName; SHA-1=$sha1; scope=${DriveAuthorization.DRIVE_FILE}\n$environment"
         android.util.Log.i("CatchingOAuth", diagnostic)
         container.settingsRepository.setDriveDiagnostics(diagnostic)
     }

@@ -20,8 +20,8 @@ android {
         applicationId = "ru.bruce.dispatcherinbox"
         minSdk = 26
         targetSdk = 36
-        versionCode = 10
-        versionName = "0.6.4"
+        versionCode = 11
+        versionName = "0.6.5"
         val suppliedUpdateUrl = providers.gradleProperty("updateManifestUrl").orNull.orEmpty().trim()
         val updateUrl = suppliedUpdateUrl.ifBlank { "https://raw.githubusercontent.com/dedtsss/dispatcher-android-inbox/main/updates/update.json" }
         if (updateUrl.isNotEmpty()) {
@@ -60,7 +60,9 @@ android {
         }
         release {
             isMinifyEnabled = false
-            stableSigningConfig?.let { signingConfig = it }
+            if (providers.environmentVariable("DISPATCHER_UNSIGNED_RELEASE").orNull != "true") {
+                stableSigningConfig?.let { signingConfig = it }
+            }
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",

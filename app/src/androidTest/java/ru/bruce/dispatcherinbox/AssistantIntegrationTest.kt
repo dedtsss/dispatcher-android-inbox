@@ -13,6 +13,49 @@ import ru.bruce.dispatcherinbox.assistant.AssistantEntryActivity
 import java.io.File
 
 class AssistantIntegrationTest {
+    @Test fun compactOriginalLogoOnBothSurfaces() = runBlocking<Unit> {
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        val context = instrumentation.targetContext
+        val settings = (context.applicationContext as DispatcherApplication).container.settingsRepository
+        val device = UiDevice.getInstance(instrumentation)
+        settings.setAssistantOpenMode("voice")
+        settings.setAutoStartAssistantRecording(false)
+        val dir = File(context.getExternalFilesDir(null), "catching-evidence").apply { mkdirs() }
+        fun verify(name: String, compact: Boolean) {
+            assertTrue(device.wait(Until.hasObject(By.desc("Catching")), 10000))
+            device.waitForIdle()
+            val logo = device.findObject(By.desc("Catching")).visibleBounds
+            val density = context.resources.displayMetrics.density
+            assertTrue("Логотип превышает ограничение ширины: $logo", logo.width() <= (if (compact) 184 else 208) * density + 2)
+            assertTrue("Логотип обрезан по высоте: $logo", logo.height() >= (if (compact) 48 else 56) * density - 2)
+            if (compact) {
+                for (label in listOf("Закрыть ассистент", "Настройки ассистента")) {
+                    val button = device.findObject(By.desc(label)).visibleBounds
+                    assertFalse("Логотип перекрывает $label", android.graphics.Rect.intersects(logo, button))
+                    assertTrue(button.width() >= 44 * density && button.height() >= 44 * density)
+                }
+            }
+            assertTrue(device.takeScreenshot(File(dir, "$name.png")))
+            device.dumpWindowHierarchy(File(dir, "$name.xml"))
+        }
+        try {
+            for (narrow in listOf(false, true)) {
+                if (narrow) device.executeShellCommand("wm size 864x1920")
+                val suffix = if (narrow) "narrow" else "normal"
+                ActivityScenario.launch<MainActivity>(Intent(context, MainActivity::class.java)).use {
+                    verify("logo-main-$suffix", false)
+                }
+                ActivityScenario.launch<AssistantEntryActivity>(Intent(context, AssistantEntryActivity::class.java)
+                    .setAction(Intent.ACTION_ASSIST)).use {
+                    assertTrue(device.wait(Until.hasObject(By.desc("Закрыть ассистент")), 10000))
+                    verify("logo-assistant-$suffix", true)
+                }
+            }
+        } finally {
+            device.executeShellCommand("wm size reset")
+        }
+    }
+
     @Test fun launcherWaitsAndOverlayControlsNavigate() = runBlocking<Unit> {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val context = instrumentation.targetContext
