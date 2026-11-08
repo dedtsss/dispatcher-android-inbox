@@ -1,8 +1,28 @@
 # Catching: повторный разбор подключения Google Drive 08.11.2026
 
+## Итог — предварительная 0.6.8/code14 доставлена, OAuth E2E ожидается
+
+[Скачать APK, метаданные и доказательства](https://github.com/dedtsss/dispatcher-android-inbox/releases/tag/v0.6.8). Путь кнопки переработан и проверен протокольными тестами; **реальная физическая Google OAuth/Drive E2E-приёмка НЕ ПРОЙДЕНА**. Project ID/авторизованный Cloud Console не обнаружены. Код 8 не приписывается установленной облачной причине. Нужна проверка владельцем регистрации/Drive API/consent и физический вход с оригиналами Catching/Inbox. PR #8 OPEN, не объединён.
+
+- Source/tag: `00d5130caa53c12effae3c473c297a12e923faa1`. [Финальный CI 42480873137](https://github.com/dedtsss/dispatcher-android-inbox/actions/runs/42480873137) **SUCCESS**: **35 unit, 0 ошибок/пропусков**, lint, **19/19 Android**, **restart 1/1**, семь install-over, строгая проверка старого Room до обновления и повтор настоящей опубликованной **0.6.5** после restart. В 19 входят 10 протокольных тестов с синтетическим backend и 9 прежних; это не реальный Google consent.
+- Exact artifact **13617194510**, ZIP digest `3ef4af0b31e45ad7adcb32b8ead1b06ef1c6e938216a45019e504cf669629363`: скачан по ID, дайджест проверен, оба APK по SHA256SUMS совпали. Signed APK SHA-256 **`317503dbaed8694f7234586b74038820981d2266f8f88cd79a0419ac941724f8`**, unsigned `eec2ba53601512cb3def4d4c6424ec34c08f487017d79ef77ef7cc8b7fe1f9ff`.
+- CI проверил package `ru.bruce.dispatcherinbox`, 0.6.8/code14, единственного signer и прежний SHA-256 сертификата **`873bc4580e6d0387a37a155f5c6a6adba71d10408f53fd9d1e8834d54045a645`**, SHA-1 `A6:C7:D7:85:0C:80:50:A4:B1:51:75:ED:34:A1:7B:7E:D8:80:98:11`. Локальные JVM/SDK/сборка/проверка APK через SDK не выполнялись: опубликованные байты сопоставлены с exact CI APK, чья подпись проверена в CI.
+- Compact proof artifact **13617363555**, digest `da802f97f94a54843a4ac01764a4aef65e2e9e1fb6eea94b471e9d24a34d4ce3`, unit reports **13617792200**, digest `aa83c9257bcb53520a06bb49259a2b93f3e28a8d6b62cdb56b3c5bab6e67423c`: оба скачаны, дайджесты проверены. Старый writer подтверждён сохранённым logcat `oldDebugWriterConfirmed=true; queuedToSynced=true; fakeRemoteIdConfirmed=true; autoSync=false`. Принудительный manual-probe локализует старый fake writer; точный timing первоначального падения не восстановлен. Отмена прежних работ и строгие проверки фаз устраняют конкурирующую запись до миграции, не меняя ожидаемые queued/error/synced.
+- Принятый прозрачный логотип и ассистент побайтно в исходниках прежние (`git diff 54ea3d2..00d5130` для capture/resources/assistant пуст). Четыре CI-снимка просмотрены; статусы «Отправлено» на синтетических записях — фикстуры, не Google Drive. Доказательства постоянно приложены к выпуску, в том числе точный ZIP `android-evidence-0.6.8.zip`.
+- Промежуточная 0.6.7/code13 не публиковалась в Releases/updater. Её exact artifact архивирован с проверенным digest и metadata, затем удалён из Actions только по доказанной необходимости места для изменённого финального APK. Владелец ранее удалил два старых failed artifacts; других удалений не было. Исторический архив 13420616150, рабочие 0.6.5 и Releases сохранены. После финального CI активные artifacts **277401101/280000000 Б**. Полный общий Android evidence закономерно остановлен бюджетом, компактные доказательства и exact APK сохранены. Бюджеты/предохранители не менялись.
+- Prerelease **v0.6.8**, release ID **438243615**, 13 assets. Все серверные SHA-256 проверены; все 13 файлов скачаны без авторизации и сверены с дайджестами. Публичный APK побайтно совпал с exact CI APK, тег указывает на 00d5130. Только после проверки опубликованного APK public `main/updates/update.json` переключён коммитом **75326f0c777b4e06196dd7f053490bba9cc8e684**; canonical raw manifest скачан и полностью совпал с release/update.json.
+- Исследование по search-default-policy сохранено также в [памяти agent-dispatch](https://github.com/dedtsss/agent-dispatch/blob/main/docs/memory/catching-oauth-flow-review-2026-11-08.md), индексе и решениях. Два осмысленных CI этого продолжения, оба SUCCESS. Ни новых задач/исполнителей, ни локальной компиляции, ни изменений постоянных служб.
+
+| Принятый экран | Обычная ширина | Узкая ширина |
+|---|---|---|
+| Главный | [PNG](https://github.com/dedtsss/dispatcher-android-inbox/releases/download/v0.6.8/logo-main-normal.png) | [PNG](https://github.com/dedtsss/dispatcher-android-inbox/releases/download/v0.6.8/logo-main-narrow.png) |
+| Ассистент | [PNG](https://github.com/dedtsss/dispatcher-android-inbox/releases/download/v0.6.8/logo-assistant-normal.png) | [PNG](https://github.com/dedtsss/dispatcher-android-inbox/releases/download/v0.6.8/logo-assistant-narrow.png) |
+
+Следующий шаг владельца: установить поверх 0.6.5 без удаления приложения; выбрать Google-аккаунт, подтвердить drive.file и проверить настоящие оригиналы/хеши/повтор очереди. При отказе сначала сверить существующий Cloud project/Android client/API/consent по списку в конце документа; не менять signer/package/SDK наугад. Разрешённого маршрута к физическому телефону в текущих tools нет, проверка телефона/его updater для 0.6.8 не заявляется выполненной.
+
 ## Границы и baseline
 
-Продолжение Issue #7 / PR #8, один прежний исполнитель, без подчинённых агентов. Baseline local/remote — чистая `issue-7-drive-inbox`, `54ea3d2a728a461224214ea1f26a76456a9237b5`. §7, AGENTS и search-default-policy перечитаны. Прозрачное оформление **принято владельцем и не меняется**. Новая функциональная версия — **0.6.7/code13**, стабильные package/ключ/Room/оригиналы/очередь сохраняются. Все сборки/JVM/SDK/эмуляторы — только Actions приложения.
+Продолжение Issue #7 / PR #8, один прежний исполнитель, без подчинённых агентов. Baseline local/remote — чистая `issue-7-drive-inbox`, `54ea3d2a728a461224214ea1f26a76456a9237b5`. §7, AGENTS и search-default-policy перечитаны. Прозрачное оформление **принято владельцем и не меняется**. Промежуточная версия — **0.6.7/code13**, финальная — **0.6.8/code14**, стабильные package/ключ/Room/оригиналы/очередь сохраняются. Все сборки/JVM/SDK/эмуляторы — только Actions приложения.
 
 Управляющий чат удалил два согласованных failed release artifacts: API подтвердил 404 для 13430232908 и 13430180381. Активный объём до нового CI — 246517060 Б, предел 280000000 Б. Дополнительных удалений и изменения бюджета нет. Исторический архив 13420616150, рабочие 0.6.5 artifacts и Releases сохранены. До всех фактических ворот публичные 0.6.5 и updater не меняются.
 
@@ -65,7 +85,7 @@ Cloud-доступ повторно проверен разрешёнными с
 
 Владельцу требуется указать существующий project ID/разрешённый Cloud Console либо проверить в одном проекте: Android client `ru.bruce.dispatcherinbox` + SHA-1 `A6:C7:D7:85:0C:80:50:A4:B1:51:75:ED:34:A1:7B:7E:D8:80:98:11`, Drive API enabled, Branding/Audience/Testing и drive.file. Затем на физическом телефоне пройти выбор/consent, выгрузить оригиналы в Catching/Inbox, сверить байты и повтор очереди без дублей/потери. Секреты и email в GitHub не нужны. PR не объединять до этого E2E.
 
-Результаты CI/артефакта/публикации будут дописаны только по факту.
+Фактические результаты CI/артефакта/публикации приведены в начале документа.
 
 ## Первый полный CI и завершающая проверка HTTP401
 
