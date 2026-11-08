@@ -34,9 +34,12 @@ class AssistantIntegrationTest {
             assertTrue("Неверная высота области логотипа: $logo", kotlin.math.abs(logo.height() - expectedHeight) <= 2)
             if (compact) {
                 for (label in listOf("Закрыть ассистент", "Настройки ассистента")) {
-                    val button = device.findObject(By.desc(label)).visibleBounds
+                    val icon = device.findObject(By.desc(label))
+                    val target = if (icon.isClickable) icon else icon.parent
+                    assertTrue("Не найдена кнопка для $label", target.isClickable)
+                    val button = target.visibleBounds
                     assertFalse("Логотип перекрывает $label", android.graphics.Rect.intersects(logo, button))
-                    assertTrue(button.width() >= 44 * density && button.height() >= 44 * density)
+                    assertTrue("Малая область нажатия $label: $button", button.width() >= 44 * density && button.height() >= 44 * density)
                 }
             }
         }
