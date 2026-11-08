@@ -16,6 +16,7 @@ for label in ${UPGRADE_LABELS:-v1 v2 v060 v061 v062 v064 v065}; do
   adb install apk/androidTest/debug/app-debug-androidTest.apk
   if [ "$label" = v2 ]; then
     timeout 120s adb shell am instrument -w -e class ru.bruce.dispatcherinbox.HistoricalSeedTest#demonstrateHistoricalDebugSender "$runner" | tee upgrade-evidence/v2-debug-writer-probe.txt
+    adb logcat -d -s CatchingFixture > upgrade-evidence/v2-debug-writer-log.txt
     grep -q 'OK (1 test)' upgrade-evidence/v2-debug-writer-probe.txt
   fi
   timeout 120s adb shell am instrument -w -e class ru.bruce.dispatcherinbox.HistoricalSeedTest#seedWithHistoricalRoom "$runner" | tee "upgrade-evidence/$label-seed.txt"

@@ -26,7 +26,8 @@ internal class GoogleDriveConnectionBackend(private val context: Context) : Driv
     override fun parse(data: Intent?) = grant(auth.client.getAuthorizationResultFromIntent(data))
     override suspend fun verifyAndConnect(account: String, token: String) {
         record("drive_verify", "accessGranted=true")
-        withContext(Dispatchers.IO) {
+        withInvalidTokenCleanup(token, auth::clear) {
+          withContext(Dispatchers.IO) {
             val drive = DriveRestClient(token)
             val actual = drive.json("drive/v3/about?fields=user(emailAddress)")["user"].asJsonObject["emailAddress"].asString
             check(actual.equals(account, ignoreCase = true)) { "account_mismatch" }
@@ -36,6 +37,7 @@ internal class GoogleDriveConnectionBackend(private val context: Context) : Driv
             }).inbox()
             // Только подтверждённый аккаунт становится destination; старые записи не меняются.
             container.settingsRepository.setDriveAccount(actual)
+          }
         }
         container.settingsRepository.setDriveStatus("Подключён · Catching/Inbox")
         SyncScheduler(context, container.settingsRepository).scheduleManual()

@@ -81,8 +81,8 @@ jobs:
           SIGNING_KEY_PASSWORD: ${{ secrets.DISPATCHER_SIGNING_KEY_PASSWORD }}
         run: |
           mkdir -p release
-          cp app/build/outputs/apk/release/app-release-unsigned.apk release/catching-0.6.7-unsigned.apk
-          "$ANDROID_HOME/build-tools/35.0.0/apksigner" sign --ks "$RUNNER_TEMP/dispatcher-signing/dispatcher.jks" --ks-pass env:SIGNING_STORE_PASSWORD --ks-key-alias "$SIGNING_KEY_ALIAS" --key-pass env:SIGNING_KEY_PASSWORD --out app/build/outputs/apk/release/app-release.apk release/catching-0.6.7-unsigned.apk
+          cp app/build/outputs/apk/release/app-release-unsigned.apk release/catching-0.6.8-unsigned.apk
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" sign --ks "$RUNNER_TEMP/dispatcher-signing/dispatcher.jks" --ks-pass env:SIGNING_STORE_PASSWORD --ks-key-alias "$SIGNING_KEY_ALIAS" --key-pass env:SIGNING_KEY_PASSWORD --out app/build/outputs/apk/release/app-release.apk release/catching-0.6.8-unsigned.apk
       - name: Собрать исторические APK с прежними схемами и постоянной подписью
         env:
           GH_TOKEN: ${{ github.token }}
@@ -95,15 +95,15 @@ jobs:
       - name: Проверить подпись и сохранить параметры OAuth
         run: |
           mkdir -p release
-          cp app/build/outputs/apk/release/app-release.apk release/catching-0.6.7-release.apk
-          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs release/catching-0.6.7-release.apk > release/certificate.txt
+          cp app/build/outputs/apk/release/app-release.apk release/catching-0.6.8-release.apk
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs release/catching-0.6.8-release.apk > release/certificate.txt
           grep -qi '873bc4580e6d0387a37a155f5c6a6adba71d10408f53fd9d1e8834d54045a645' release/certificate.txt
-          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging release/catching-0.6.7-release.apk > release/package.txt
-          grep -q "package: name='ru.bruce.dispatcherinbox' versionCode='13' versionName='0.6.7'" release/package.txt
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging release/catching-0.6.8-release.apk > release/package.txt
+          grep -q "package: name='ru.bruce.dispatcherinbox' versionCode='14' versionName='0.6.8'" release/package.txt
           printf '%s\n' "$GITHUB_SHA" > release/source-head.txt
-          sha256sum release/catching-0.6.7-*.apk | sed 's#  release/#  #' > release/SHA256SUMS
+          sha256sum release/catching-0.6.8-*.apk | sed 's#  release/#  #' > release/SHA256SUMS
           {
-            echo 'Приложение: Catching 0.6.7 (versionCode 13)'
+            echo 'Приложение: Catching 0.6.8 (versionCode 14)'
             echo 'Android OAuth package: ru.bruce.dispatcherinbox'
             echo 'Scope: https://www.googleapis.com/auth/drive.file'
             echo 'Нужен Android OAuth client с SHA-1 ниже и включённый Google Drive API.'
@@ -114,7 +114,7 @@ jobs:
         if: vars.UPDATE_APK_URL != ''
         env:
           UPDATE_APK_URL: ${{ vars.UPDATE_APK_URL }}
-        run: python3 scripts/update/generate-manifest.py --apk release/catching-0.6.7-release.apk --apk-url "$UPDATE_APK_URL" --build-tools "$ANDROID_HOME/build-tools/35.0.0" --output release/update.json
+        run: python3 scripts/update/generate-manifest.py --apk release/catching-0.6.8-release.apk --apk-url "$UPDATE_APK_URL" --build-tools "$ANDROID_HOME/build-tools/35.0.0" --output release/update.json
       - name: Ограничить размер подписанного release artifact
         run: |
           bytes=$(du -sb release | cut -f1)
@@ -172,7 +172,7 @@ jobs:
         if: github.event_name == 'workflow_dispatch' && inputs.publish_release_artifact && steps.android-qa.outcome == 'success' && steps.release-artifact-budget.outcome == 'success'
         uses: actions/upload-artifact@v4
         with:
-          name: catching-0.6.7-release
+          name: catching-0.6.8-release
           path: release/
           if-no-files-found: error
           retention-days: 30
@@ -180,7 +180,7 @@ jobs:
         if: always()
         run: |
           mkdir -p visual-proof
-          for path in evidence/logo-*.png evidence/logo-*.xml instrumentation.txt restart.txt installed-package.txt release/source-head.txt release/certificate.txt release/package.txt upgrade-evidence/*-verify.txt; do
+          for path in evidence/logo-*.png evidence/logo-*.xml instrumentation.txt restart.txt installed-package.txt release/source-head.txt release/certificate.txt release/package.txt upgrade-evidence/*-verify.txt upgrade-evidence/*-before-upgrade.txt upgrade-evidence/v2-debug-writer-*.txt; do
             [ ! -f "$path" ] || cp "$path" visual-proof/
           done
           test "$(du -sb visual-proof | cut -f1)" -le $((3 * 1024 * 1024))
@@ -196,7 +196,7 @@ jobs:
         if: always() && steps.compact-proof-budget.outcome == 'success'
         uses: actions/upload-artifact@v4
         with:
-          name: оформление-0.6.7
+          name: оформление-0.6.8
           path: visual-proof/
           retention-days: 1
       - name: Ограничить размер device QA evidence
@@ -400,7 +400,7 @@ jobs:
           import json, hashlib, subprocess, zipfile
           from pathlib import Path
           r=json.load(open('source-run.json'))
-          a=[a for a in json.load(open('source-artifacts.json'))['artifacts'] if a['name']=='catching-0.6.7-release' and not a['expired']]
+          a=[a for a in json.load(open('source-artifacts.json'))['artifacts'] if a['name']=='catching-0.6.8-release' and not a['expired']]
           assert len(a)==1
           a=a[0]
           with open('exact-release.zip','wb') as f:
@@ -432,6 +432,6 @@ jobs:
       - name: Сохранить компактные визуальные доказательства
         uses: actions/upload-artifact@v4
         with:
-          name: снимки-release-0.6.7
+          name: снимки-release-0.6.8
           path: visual/
           retention-days: 1
