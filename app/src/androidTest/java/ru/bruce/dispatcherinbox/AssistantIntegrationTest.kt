@@ -40,13 +40,18 @@ class AssistantIntegrationTest {
             if (android.graphics.Color.alpha(before) == 0) transparent++
             if (x < 250 || (x in 680 until 720 && y in 20 until 62)) {
                 if (before != after) fail("Изменён кот или фиолетовый акцент $x,$y")
-            } else if (android.graphics.Color.alpha(before) == 255) {
-                if (after != 0xFFF1EDF6.toInt()) fail("Буква не получила светлый цвет $x,$y")
+            } else if (android.graphics.Color.alpha(before) >= 128) {
+                // В оригинале нет alpha=255 у букв; учитываем округление premultiplied RGB.
+                val expected = 0xFFF1EDF6.toInt()
+                val channels = listOf(android.graphics.Color.red(after) to android.graphics.Color.red(expected),
+                    android.graphics.Color.green(after) to android.graphics.Color.green(expected),
+                    android.graphics.Color.blue(after) to android.graphics.Color.blue(expected))
+                if (channels.any { (actual, wanted) -> kotlin.math.abs(actual - wanted) > 2 }) fail("Буква не получила светлый цвет $x,$y")
                 letters++
             }
         }
         assertTrue("Утрачена прозрачная область", transparent > 100000)
-        assertTrue("Не проверены буквы", letters > 10000)
+        assertTrue("Не проверены буквы ($letters)", letters > 30000)
     }
 
     @Test fun compactOriginalLogoOnBothSurfaces() = runBlocking<Unit> {
