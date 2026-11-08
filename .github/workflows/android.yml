@@ -81,8 +81,8 @@ jobs:
           SIGNING_KEY_PASSWORD: ${{ secrets.DISPATCHER_SIGNING_KEY_PASSWORD }}
         run: |
           mkdir -p release
-          cp app/build/outputs/apk/release/app-release-unsigned.apk release/catching-0.6.6-unsigned.apk
-          "$ANDROID_HOME/build-tools/35.0.0/apksigner" sign --ks "$RUNNER_TEMP/dispatcher-signing/dispatcher.jks" --ks-pass env:SIGNING_STORE_PASSWORD --ks-key-alias "$SIGNING_KEY_ALIAS" --key-pass env:SIGNING_KEY_PASSWORD --out app/build/outputs/apk/release/app-release.apk release/catching-0.6.6-unsigned.apk
+          cp app/build/outputs/apk/release/app-release-unsigned.apk release/catching-0.6.7-unsigned.apk
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" sign --ks "$RUNNER_TEMP/dispatcher-signing/dispatcher.jks" --ks-pass env:SIGNING_STORE_PASSWORD --ks-key-alias "$SIGNING_KEY_ALIAS" --key-pass env:SIGNING_KEY_PASSWORD --out app/build/outputs/apk/release/app-release.apk release/catching-0.6.7-unsigned.apk
       - name: Собрать исторические APK с прежними схемами и постоянной подписью
         env:
           GH_TOKEN: ${{ github.token }}
@@ -95,15 +95,15 @@ jobs:
       - name: Проверить подпись и сохранить параметры OAuth
         run: |
           mkdir -p release
-          cp app/build/outputs/apk/release/app-release.apk release/catching-0.6.6-release.apk
-          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs release/catching-0.6.6-release.apk > release/certificate.txt
+          cp app/build/outputs/apk/release/app-release.apk release/catching-0.6.7-release.apk
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs release/catching-0.6.7-release.apk > release/certificate.txt
           grep -qi '873bc4580e6d0387a37a155f5c6a6adba71d10408f53fd9d1e8834d54045a645' release/certificate.txt
-          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging release/catching-0.6.6-release.apk > release/package.txt
-          grep -q "package: name='ru.bruce.dispatcherinbox' versionCode='12' versionName='0.6.6'" release/package.txt
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging release/catching-0.6.7-release.apk > release/package.txt
+          grep -q "package: name='ru.bruce.dispatcherinbox' versionCode='13' versionName='0.6.7'" release/package.txt
           printf '%s\n' "$GITHUB_SHA" > release/source-head.txt
-          sha256sum release/catching-0.6.6-*.apk | sed 's#  release/#  #' > release/SHA256SUMS
+          sha256sum release/catching-0.6.7-*.apk | sed 's#  release/#  #' > release/SHA256SUMS
           {
-            echo 'Приложение: Catching 0.6.6 (versionCode 12)'
+            echo 'Приложение: Catching 0.6.7 (versionCode 13)'
             echo 'Android OAuth package: ru.bruce.dispatcherinbox'
             echo 'Scope: https://www.googleapis.com/auth/drive.file'
             echo 'Нужен Android OAuth client с SHA-1 ниже и включённый Google Drive API.'
@@ -114,7 +114,7 @@ jobs:
         if: vars.UPDATE_APK_URL != ''
         env:
           UPDATE_APK_URL: ${{ vars.UPDATE_APK_URL }}
-        run: python3 scripts/update/generate-manifest.py --apk release/catching-0.6.6-release.apk --apk-url "$UPDATE_APK_URL" --build-tools "$ANDROID_HOME/build-tools/35.0.0" --output release/update.json
+        run: python3 scripts/update/generate-manifest.py --apk release/catching-0.6.7-release.apk --apk-url "$UPDATE_APK_URL" --build-tools "$ANDROID_HOME/build-tools/35.0.0" --output release/update.json
       - name: Ограничить размер подписанного release artifact
         run: |
           bytes=$(du -sb release | cut -f1)
@@ -144,7 +144,7 @@ jobs:
             adb shell pm grant ru.bruce.dispatcherinbox android.permission.RECORD_AUDIO
             adb shell svc wifi disable
             adb shell svc data disable
-            timeout 240s adb shell am instrument -w -e class ru.bruce.dispatcherinbox.CaptureIntegrationTest,ru.bruce.dispatcherinbox.AssistantIntegrationTest,ru.bruce.dispatcherinbox.UpdateRecoveryTest ru.bruce.dispatcherinbox.test/androidx.test.runner.AndroidJUnitRunner | tee instrumentation.txt
+            timeout 240s adb shell am instrument -w -e class ru.bruce.dispatcherinbox.DriveConnectionTest,ru.bruce.dispatcherinbox.CaptureIntegrationTest,ru.bruce.dispatcherinbox.AssistantIntegrationTest,ru.bruce.dispatcherinbox.UpdateRecoveryTest ru.bruce.dispatcherinbox.test/androidx.test.runner.AndroidJUnitRunner | tee instrumentation.txt
             adb logcat -d > logcat.txt
             adb shell dumpsys activity exit-info ru.bruce.dispatcherinbox > exit-info.txt
             adb shell dumpsys activity processes > processes.txt
@@ -172,7 +172,7 @@ jobs:
         if: github.event_name == 'workflow_dispatch' && inputs.publish_release_artifact && steps.android-qa.outcome == 'success' && steps.release-artifact-budget.outcome == 'success'
         uses: actions/upload-artifact@v4
         with:
-          name: catching-0.6.6-release
+          name: catching-0.6.7-release
           path: release/
           if-no-files-found: error
           retention-days: 30
@@ -196,7 +196,7 @@ jobs:
         if: always() && steps.compact-proof-budget.outcome == 'success'
         uses: actions/upload-artifact@v4
         with:
-          name: оформление-0.6.6
+          name: оформление-0.6.7
           path: visual-proof/
           retention-days: 1
       - name: Ограничить размер device QA evidence
@@ -329,7 +329,7 @@ jobs:
             adb shell pm grant ru.bruce.dispatcherinbox android.permission.RECORD_AUDIO
             adb shell svc wifi disable
             adb shell svc data disable
-            timeout 240s adb shell am instrument -w -e class ru.bruce.dispatcherinbox.CaptureIntegrationTest,ru.bruce.dispatcherinbox.AssistantIntegrationTest,ru.bruce.dispatcherinbox.UpdateRecoveryTest ru.bruce.dispatcherinbox.test/androidx.test.runner.AndroidJUnitRunner | tee instrumentation.txt
+            timeout 240s adb shell am instrument -w -e class ru.bruce.dispatcherinbox.DriveConnectionTest,ru.bruce.dispatcherinbox.CaptureIntegrationTest,ru.bruce.dispatcherinbox.AssistantIntegrationTest,ru.bruce.dispatcherinbox.UpdateRecoveryTest ru.bruce.dispatcherinbox.test/androidx.test.runner.AndroidJUnitRunner | tee instrumentation.txt
             adb logcat -d > logcat.txt
             adb shell dumpsys activity exit-info ru.bruce.dispatcherinbox > exit-info.txt
             adb shell dumpsys activity processes > processes.txt
@@ -400,7 +400,7 @@ jobs:
           import json, hashlib, subprocess, zipfile
           from pathlib import Path
           r=json.load(open('source-run.json'))
-          a=[a for a in json.load(open('source-artifacts.json'))['artifacts'] if a['name']=='catching-0.6.6-release' and not a['expired']]
+          a=[a for a in json.load(open('source-artifacts.json'))['artifacts'] if a['name']=='catching-0.6.7-release' and not a['expired']]
           assert len(a)==1
           a=a[0]
           with open('exact-release.zip','wb') as f:
@@ -432,6 +432,6 @@ jobs:
       - name: Сохранить компактные визуальные доказательства
         uses: actions/upload-artifact@v4
         with:
-          name: снимки-release-0.6.6
+          name: снимки-release-0.6.7
           path: visual/
           retention-days: 1

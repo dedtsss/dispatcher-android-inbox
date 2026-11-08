@@ -24,9 +24,9 @@ class DriveAuthorization(context: Context) {
         val result = try { client.authorize(request(settings.driveAccount)).await() }
         catch (e: ApiException) {
             if (e.statusCode == 7 || e.statusCode == 15) throw IOException("Нет связи с Google", e)
-            error(if (e.statusCode == 10) "Google OAuth не настроен: зарегистрируйте package + SHA-1 этого APK (код 10)"
-                else "Google Drive требует повторного подключения (код ${e.statusCode})")
+            error("Подключите Google Drive повторно в настройках. Оригиналы сохранены на телефоне")
         }
+        check(DRIVE_FILE in result.grantedScopes) { "Подключите Google Drive повторно. Оригиналы сохранены на телефоне" }
         check(!result.hasResolution()) { "Google Drive требует подтверждения. Подключите его повторно в настройках" }
         return checkNotNull(result.accessToken) { "Google не выдал доступ к Drive. Подключите повторно" }
     }

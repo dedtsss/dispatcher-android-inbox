@@ -33,8 +33,8 @@ class EntryAndDeliveryTest {
     @Test fun unknownResultIsNeverReportedAsCancellationOrMissingClient() {
         assertFalse(AuthorizationDiagnostics.message(null).contains("отмен", ignoreCase = true))
         assertTrue(AuthorizationDiagnostics.message(16).contains("отмен"))
-        assertTrue(AuthorizationDiagnostics.message(10).contains("SHA-1"))
-        assertTrue(AuthorizationDiagnostics.message(null, 403, "accessNotConfigured").contains("Drive API"))
+        assertTrue(AuthorizationDiagnostics.message(10).contains("Google Cloud"))
+        assertTrue(AuthorizationDiagnostics.message(null, 403, "accessNotConfigured").contains("Google Drive"))
     }
     @Test fun diagnosticDoesNotExposeAccountOrOpaqueSecrets() {
         val result = AuthorizationDiagnostics.safeMessage("user@example.test " + "secret".repeat(20))

@@ -1,116 +1,85 @@
 package ru.bruce.dispatcherinbox.drive
 
+import android.accounts.AccountManager
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.setContent
 import androidx.activity.result.IntentSenderRequest
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.activity.viewModels
+import androidx.compose.foundation.layout.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.getValue
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
+import androidx.lifecycle.SavedStateHandle
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.createSavedStateHandle
 import androidx.lifecycle.lifecycleScope
-import com.google.android.gms.auth.api.identity.AuthorizationResult
-import com.google.android.gms.common.api.ApiException
-import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.first
+import androidx.lifecycle.repeatOnLifecycle
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.tasks.await
-import kotlinx.coroutines.withContext
-import ru.bruce.dispatcherinbox.DispatcherApplication
-import ru.bruce.dispatcherinbox.sync.SyncScheduler
+import ru.bruce.dispatcherinbox.ui.theme.DispatcherInboxTheme
 
 class DriveConnectActivity : ComponentActivity() {
-    private var awaitingResolution = false
-    private var authorizationSummary = ""
-    private var stage = "authorize"
-    private var activityResultCode: Int? = null
-    private val container get() = (application as DispatcherApplication).container
-    private val auth by lazy { DriveAuthorization(this) }
-    private val resolution = registerForActivityResult(ActivityResultContracts.StartIntentSenderForResult()) { result ->
-        awaitingResolution = false
-        lifecycleScope.launch {
-            try {
-                stage = "resolution"
-                activityResultCode = result.resultCode
-                // Google может вернуть ApiException и при RESULT_CANCELED: всегда декодируем Intent.
-                connected(auth.client.getAuthorizationResultFromIntent(result.data))
-            } catch (e: CancellationException) { throw e }
-            catch (e: Exception) { failed(e) }
-            finish()
+    private val model: DriveConnectionViewModel by viewModels {
+        object : ViewModelProvider.Factory {
+            @Suppress("UNCHECKED_CAST")
+            override fun <T : ViewModel> create(modelClass: Class<T>, extras: androidx.lifecycle.viewmodel.CreationExtras): T =
+                DriveConnectionViewModel(extras.createSavedStateHandle(), applicationContext) as T
         }
     }
-
+    // Оба контракта зарегистрированы при создании Activity, до STARTED.
+    private val accountPicker = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        model.flow.accountResult(result.data?.getStringExtra(AccountManager.KEY_ACCOUNT_NAME),
+            result.data?.getStringExtra(AccountManager.KEY_ACCOUNT_TYPE), result.resultCode == RESULT_CANCELED)
+    }
+    private val consent = registerForActivityResult(ActivityResultContracts.StartIntentSenderForResult()) { result ->
+        model.flow.consentResult(result.resultCode, result.data)
+    }
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        awaitingResolution = savedInstanceState?.getBoolean("awaiting_resolution") ?: false
-        authorizationSummary = savedInstanceState?.getString("authorization_summary").orEmpty()
-        stage = savedInstanceState?.getString("authorization_stage") ?: "authorize"
-        if (awaitingResolution) return
-        lifecycleScope.launch {
-            try {
-                container.settingsRepository.setDriveStatus("Ожидаем подтверждения Google…")
-                val settings = container.settingsRepository.settings.first()
-                val result = auth.client.authorize(auth.request(settings.driveAccount)).await()
-                authorizationSummary = summary(result)
-                record(authorizationSummary)
-                if (result.hasResolution()) {
-                    awaitingResolution = true
-                    resolution.launch(IntentSenderRequest.Builder(checkNotNull(result.pendingIntent)).build())
-                } else {
-                    connected(result)
-                    finish()
+        setContent {
+            DispatcherInboxTheme {
+                val ui by model.flow.state.collectAsStateWithLifecycle()
+                Surface(Modifier.fillMaxSize()) {
+                    Column(Modifier.systemBarsPadding().padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                        Text("Подключение Google Drive", style = MaterialTheme.typography.headlineSmall)
+                        Text(ui.message)
+                        Text("1. Выберите аккаунт\n2. Разрешите доступ к файлам Catching\n3. Проверим папку Catching/Inbox")
+                        if (ui.phase in setOf(ConnectionPhase.AUTHORIZE, ConnectionPhase.VERIFY)) CircularProgressIndicator()
+                        if (ui.phase in setOf(ConnectionPhase.CONSENT, ConnectionPhase.RESUME) || (ui.phase == ConnectionPhase.PICK_ACCOUNT && ui.externalLaunched)) {
+                            Button(onClick = model.flow::resume) { Text("Продолжить подключение") }
+                        }
+                        if (ui.phase in setOf(ConnectionPhase.ERROR, ConnectionPhase.CANCELED)) {
+                            Button(onClick = model.flow::retry) { Text("Выбрать аккаунт и повторить") }
+                            Text("Подробности доступны в настройках: «Диагностика подключения»")
+                        }
+                        TextButton(onClick = { if (ui.phase != ConnectionPhase.CONNECTED) model.flow.cancel(); finish() }) { Text(if (ui.phase == ConnectionPhase.CONNECTED) "Готово" else "Вернуться к записям") }
+                    }
                 }
-            } catch (e: CancellationException) { throw e }
-            catch (e: Exception) { failed(e); finish() }
+            }
         }
-    }
-
-    override fun onSaveInstanceState(outState: Bundle) {
-        outState.putBoolean("awaiting_resolution", awaitingResolution)
-        outState.putString("authorization_summary", authorizationSummary)
-        outState.putString("authorization_stage", stage)
-        super.onSaveInstanceState(outState)
-    }
-
-    private suspend fun connected(result: AuthorizationResult) {
-        authorizationSummary = summary(result)
-        record(authorizationSummary)
-        check(!result.hasResolution()) { "Google повторно запросил подтверждение" }
-        check(DriveAuthorization.DRIVE_FILE in result.grantedScopes) { "Google не подтвердил scope drive.file" }
-        val token = checkNotNull(result.accessToken) { "Google не выдал access token" }
-        stage = "drive_about"
-        val account = withContext(Dispatchers.IO) {
-            DriveRestClient(token).json("drive/v3/about?fields=user(emailAddress)")
-                .getAsJsonObject("user")["emailAddress"].asString
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                model.flow.state.collect { ui ->
+                    if (!ui.externalLaunched) try {
+                        when (ui.phase) {
+                            ConnectionPhase.PICK_ACCOUNT -> {
+                                model.flow.externalStarted()
+                                accountPicker.launch(AccountManager.newChooseAccountIntent(null, null, arrayOf("com.google"), "Выберите аккаунт для Google Drive", null, null, null))
+                            }
+                            ConnectionPhase.CONSENT -> model.flow.pendingConsent?.let {
+                                model.flow.externalStarted()
+                                consent.launch(IntentSenderRequest.Builder(it).build())
+                            }
+                            else -> Unit
+                        }
+                    } catch (e: Exception) { model.flow.launchFailed(e) }
+                }
+            }
         }
-        container.settingsRepository.setDriveAccount(account)
-        container.settingsRepository.setDriveStatus("Подключён · Готов к отправке")
-        SyncScheduler(this, container.settingsRepository).scheduleManual()
-    }
-
-    private suspend fun failed(error: Exception) {
-        val api = error as? ApiException
-        val http = error as? DriveHttpException
-        record("apiStatus=${api?.statusCode}; statusName=${api?.statusCode?.let(com.google.android.gms.common.api.CommonStatusCodes::getStatusCodeString)}; providerMessage=${AuthorizationDiagnostics.safeMessage(api?.status?.statusMessage)}; authorizationResult=$authorizationSummary; httpStatus=${http?.code}; reason=${http?.reason.orEmpty()}; exception=${error.javaClass.simpleName}; detail=${AuthorizationDiagnostics.safeMessage(error.message)}")
-        container.settingsRepository.setDriveStatus(AuthorizationDiagnostics.message(api?.statusCode, http?.code, http?.reason.orEmpty()))
-    }
-
-    private fun summary(result: AuthorizationResult) = "hasResolution=${result.hasResolution()}; hasAccessToken=${!result.accessToken.isNullOrBlank()}; driveFileGranted=${DriveAuthorization.DRIVE_FILE in result.grantedScopes}"
-
-    private suspend fun record(details: String) {
-        val signer = if (android.os.Build.VERSION.SDK_INT >= 28) {
-            packageManager.getPackageInfo(packageName, android.content.pm.PackageManager.GET_SIGNING_CERTIFICATES).signingInfo?.apkContentsSigners?.firstOrNull()?.toByteArray()
-        } else {
-            @Suppress("DEPRECATION")
-            packageManager.getPackageInfo(packageName, android.content.pm.PackageManager.GET_SIGNATURES).signatures?.firstOrNull()?.toByteArray()
-        }
-        val sha1 = signer?.let { java.security.MessageDigest.getInstance("SHA-1").digest(it).joinToString(":") { b -> "%02X".format(b) } }.orEmpty()
-        val gms = runCatching {
-            @Suppress("DEPRECATION")
-            packageManager.getPackageInfo("com.google.android.gms", 0).versionName
-        }.getOrNull() ?: "unavailable"
-        val availability = com.google.android.gms.common.GoogleApiAvailability.getInstance()
-            .isGooglePlayServicesAvailable(this)
-        val environment = "Android=${android.os.Build.VERSION.SDK_INT}; gmsVersion=$gms; gmsAvailability=$availability; authSdk=21.4.0; app=${ru.bruce.dispatcherinbox.BuildConfig.VERSION_NAME}/${ru.bruce.dispatcherinbox.BuildConfig.VERSION_CODE}"
-        val diagnostic = "stage=$stage; resultCode=$activityResultCode; $details\npackage=$packageName; SHA-1=$sha1; scope=${DriveAuthorization.DRIVE_FILE}\n$environment"
-        android.util.Log.i("CatchingOAuth", diagnostic)
-        container.settingsRepository.setDriveDiagnostics(diagnostic)
     }
 }

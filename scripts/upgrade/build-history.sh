@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
+[ "${GITHUB_ACTIONS:-}" = true ] && [ "${GITHUB_REPOSITORY:-}" = dedtsss/dispatcher-android-inbox ]
 # Не меняем исторические модели и Room: БД создаёт настоящий старый код.
 mkdir -p history-apk
 # Данные создаёт старая 0.6.2, затем их открывает настоящий опубликованный APK 0.6.4.

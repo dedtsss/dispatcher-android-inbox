@@ -2,14 +2,12 @@ package ru.bruce.dispatcherinbox.drive
 
 object AuthorizationDiagnostics {
     fun message(code: Int?, httpCode: Int? = null, reason: String = ""): String = when {
-        code == 16 -> "Google сообщил об отмене подключения (код 16). Оригиналы на телефоне"
-        code == 10 -> "Google отклонил конфигурацию приложения (код 10). Проверьте Android OAuth client: package и SHA-1 этого APK"
-        code == 7 || code == 15 -> "Нет связи с Google или истекло время ожидания (код $code). Повторите подключение"
-        httpCode == 403 && reason in setOf("accessNotConfigured", "serviceDisabled") -> "Drive API недоступен для проекта OAuth (HTTP 403, $reason). Проверьте включение Google Drive API"
-        httpCode == 403 -> "Google Drive отказал в доступе (HTTP 403, ${reason.ifBlank { "причина не передана" }}). Проверьте разрешение drive.file и consent"
-        httpCode != null -> "Google Drive вернул HTTP $httpCode. Подробности в диагностике подключения"
-        code != null -> "Авторизация Google не завершена (код $code). Подробности в диагностике подключения"
-        else -> "Подключение Google Drive не завершено. Причину нельзя определить по resultCode; откройте диагностику"
+        code == 16 -> "Подключение отменено. Ваши записи остались на телефоне"
+        code == 7 || code == 15 -> "Не удалось связаться с Google. Проверьте интернет и повторите подключение"
+        code == 10 -> "Google не разрешил подключить это приложение. Требуется проверить его регистрацию в Google Cloud"
+        httpCode == 401 -> "Доступ Google истёк. Выберите аккаунт и подключитесь повторно"
+        httpCode == 403 -> "Google Drive не разрешил доступ. Проверьте разрешения приложения в Google Cloud"
+        else -> "Не удалось подключить Google Drive. Записи сохранены на телефоне. Повторите попытку; подробности — в диагностике подключения"
     }
 
     // Диагностика не должна содержать аккаунты, токены, коды доступа и содержимое Intent.

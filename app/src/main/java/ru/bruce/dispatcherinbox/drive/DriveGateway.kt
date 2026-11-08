@@ -32,27 +32,8 @@ class DriveGateway(
             val drive = clientFactory(token)
             val account = drive.json("drive/v3/about?fields=user(emailAddress)")["user"].asJsonObject["emailAddress"].asString
             check(account == settings.driveAccount) { "Аккаунт Drive изменился. Подключите его повторно" }
-            suspend fun reserved(key: String): String = ids.get("$account/$key") ?: drive.generateId().also {
-                ids.put("$account/$key", it)
-            }
-            suspend fun folder(key: String, name: String, parent: String, discover: Boolean): String {
-                val existing = ids.get("$account/$key")
-                if (existing != null) {
-                    val metadata = drive.metadata(existing)
-                    if (metadata != null) {
-                        check(metadata["trashed"]?.asBoolean != true) { "Каталог Drive находится в корзине. Восстановите его" }
-                        return existing
-                    }
-                }
-                val id = if (existing == null && discover) drive.findFolder(name, parent) else null
-                if (id != null) { ids.put("$account/$key", id); return id }
-                val allocated = reserved(key)
-                try { drive.createFolder(allocated, name, parent) }
-                catch (e: DriveHttpException) { if (e.code != 409 || drive.metadata(allocated) == null) throw e }
-                return allocated
-            }
-            val root = folder("root", "Catching", "root", true)
-            val inbox = folder("inbox", "Inbox", root, true)
+            val folders = DriveFolders(account, drive, ids)
+            val inbox = folders.inbox()
             val prefix = FORMAT.format(Instant.ofEpochMilli(item.item.createdAt)) + "_" + item.item.id
             val parts = mutableListOf<RawPart>()
             item.item.text?.let { text ->
@@ -73,9 +54,9 @@ class DriveGateway(
                 parts += RawPart(attachment.id, name, mime, file.asRequestBody(mime.toMediaType()), digest)
             }
             check(parts.isNotEmpty()) { "Пустая запись" }
-            val parent = if (parts.size > 1) folder("event/${item.item.id}", prefix, inbox, false) else inbox
+            val parent = if (parts.size > 1) folders.folder("event/${item.item.id}", prefix, inbox, false) else inbox
             val uploaded = parts.mapIndexed { index, part ->
-                val id = reserved("item/${item.item.id}/${part.key}")
+                val id = folders.reserved("item/${item.item.id}/${part.key}")
                 suspend fun confirmed(): Boolean {
                     val metadata = drive.metadata(id) ?: return false
                     check(metadata["trashed"]?.asBoolean != true) { "Оригинал Drive находится в корзине. Восстановите его" }
