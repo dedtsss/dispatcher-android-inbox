@@ -130,7 +130,9 @@ class AssistantIntegrationTest {
             Thread.sleep(1200)
             assertFalse(device.hasObject(By.desc("Остановить и сохранить")))
         }
-        settings.setAssistantOpenMode("text")
+        // Этот сценарий проверяет заголовок/маршруты; IME и текст отдельно проверяются ниже.
+        settings.setAssistantOpenMode("voice")
+        settings.setAutoStartAssistantRecording(false)
         val intent = Intent(context, AssistantEntryActivity::class.java).setAction(Intent.ACTION_ASSIST)
         ActivityScenario.launch<AssistantEntryActivity>(intent).use { scenario ->
             assertTrue(device.wait(Until.hasObject(By.desc("Закрыть ассистент")), 10000))

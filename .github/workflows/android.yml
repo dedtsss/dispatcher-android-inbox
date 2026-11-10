@@ -21,7 +21,7 @@ on:
         default: ""
         type: string
       preserve_device_artifacts:
-        description: Необязательно — сохранить архивы device-проверки на 1 день для повторного запуска
+        description: Необязательно — сохранить APK и полные device-логи на 1 день для повторного запуска
         required: false
         default: false
         type: boolean
@@ -247,26 +247,24 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           ACTIONS_ARTIFACT_BUDGET_BYTES: '280000000'
-        run: python3 scripts/ci/check_artifact_budget.py app/build/test-results app/build/reports/
+        run: python3 scripts/ci/check_artifact_budget.py app/build/test-results/
       - name: Сохранить результаты проверок
         if: always() && steps.unit-reports-budget.outputs.ok == 'true' && steps.test-reports-artifact-budget.outcome == 'success'
         uses: actions/upload-artifact@v4
         with:
           name: результаты-проверок
-          path: |
-            app/build/test-results/
-            app/build/reports/
+          path: app/build/test-results/
           retention-days: 1
       - name: Проверить бюджет перед сохранением Android device evidence
         id: device-evidence-artifact-budget
-        if: always() && steps.device-evidence-budget.outputs.ok == 'true'
+        if: always() && inputs.preserve_device_artifacts && steps.device-evidence-budget.outputs.ok == 'true'
         continue-on-error: true
         env:
           GH_TOKEN: ${{ github.token }}
           ACTIONS_ARTIFACT_BUDGET_BYTES: '280000000'
         run: python3 scripts/ci/check_artifact_budget.py upgrade-evidence instrumentation.txt restart.txt logcat.txt exit-info.txt processes.txt windows.txt installed-package.txt evidence/
       - name: Сохранить Android device evidence
-        if: always() && steps.device-evidence-budget.outputs.ok == 'true' && steps.device-evidence-artifact-budget.outcome == 'success'
+        if: always() && inputs.preserve_device_artifacts && steps.device-evidence-budget.outputs.ok == 'true' && steps.device-evidence-artifact-budget.outcome == 'success'
         uses: actions/upload-artifact@v4
         with:
           name: проверки-на-Android
