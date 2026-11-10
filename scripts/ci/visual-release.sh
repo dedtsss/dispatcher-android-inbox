@@ -2,7 +2,7 @@
 set -euo pipefail
 # Сценарий предназначен только для выделенного Android runner этого приложения.
 [ "${GITHUB_ACTIONS:-}" = true ] && [ "${GITHUB_REPOSITORY:-}" = dedtsss/dispatcher-android-inbox ]
-adb install release/catching-0.6.9-release.apk
+adb install release/catching-0.6.10-release.apk
 adb shell svc wifi disable
 adb shell svc data disable
 adb shell dumpsys package ru.bruce.dispatcherinbox > visual/installed-package.txt

@@ -81,8 +81,8 @@ jobs:
           SIGNING_KEY_PASSWORD: ${{ secrets.DISPATCHER_SIGNING_KEY_PASSWORD }}
         run: |
           mkdir -p release
-          cp app/build/outputs/apk/release/app-release-unsigned.apk release/catching-0.6.9-unsigned.apk
-          "$ANDROID_HOME/build-tools/35.0.0/apksigner" sign --ks "$RUNNER_TEMP/dispatcher-signing/dispatcher.jks" --ks-pass env:SIGNING_STORE_PASSWORD --ks-key-alias "$SIGNING_KEY_ALIAS" --key-pass env:SIGNING_KEY_PASSWORD --out app/build/outputs/apk/release/app-release.apk release/catching-0.6.9-unsigned.apk
+          cp app/build/outputs/apk/release/app-release-unsigned.apk release/catching-0.6.10-unsigned.apk
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" sign --ks "$RUNNER_TEMP/dispatcher-signing/dispatcher.jks" --ks-pass env:SIGNING_STORE_PASSWORD --ks-key-alias "$SIGNING_KEY_ALIAS" --key-pass env:SIGNING_KEY_PASSWORD --out app/build/outputs/apk/release/app-release.apk release/catching-0.6.10-unsigned.apk
       - name: Собрать исторические APK с прежними схемами и постоянной подписью
         env:
           GH_TOKEN: ${{ github.token }}
@@ -95,15 +95,19 @@ jobs:
       - name: Проверить подпись и сохранить параметры OAuth
         run: |
           mkdir -p release
-          cp app/build/outputs/apk/release/app-release.apk release/catching-0.6.9-release.apk
-          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs release/catching-0.6.9-release.apk > release/certificate.txt
+          cp app/build/outputs/apk/release/app-release.apk release/catching-0.6.10-release.apk
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs release/catching-0.6.10-release.apk > release/certificate.txt
           grep -qi '873bc4580e6d0387a37a155f5c6a6adba71d10408f53fd9d1e8834d54045a645' release/certificate.txt
-          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging release/catching-0.6.9-release.apk > release/package.txt
-          grep -q "package: name='ru.bruce.dispatcherinbox' versionCode='15' versionName='0.6.9'" release/package.txt
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging release/catching-0.6.10-release.apk > release/package.txt
+          grep -q "package: name='ru.bruce.dispatcherinbox' versionCode='16' versionName='0.6.10'" release/package.txt
+          unzip -p release/catching-0.6.10-release.apk 'classes*.dex' | strings > "$RUNNER_TEMP/release-strings.txt"
+          if grep -q 'LevelMeterTestActivity' "$RUNNER_TEMP/release-strings.txt"; then
+            echo 'Тестовый источник попал в release'; exit 1
+          fi
           printf '%s\n' "$GITHUB_SHA" > release/source-head.txt
-          sha256sum release/catching-0.6.9-*.apk | sed 's#  release/#  #' > release/SHA256SUMS
+          sha256sum release/catching-0.6.10-*.apk | sed 's#  release/#  #' > release/SHA256SUMS
           {
-            echo 'Приложение: Catching 0.6.9 (versionCode 15)'
+            echo 'Приложение: Catching 0.6.10 (versionCode 16)'
             echo 'Android OAuth package: ru.bruce.dispatcherinbox'
             echo 'Scope: https://www.googleapis.com/auth/drive.file'
             echo 'Нужен Android OAuth client с SHA-1 ниже и включённый Google Drive API.'
@@ -114,7 +118,7 @@ jobs:
         if: vars.UPDATE_APK_URL != ''
         env:
           UPDATE_APK_URL: ${{ vars.UPDATE_APK_URL }}
-        run: python3 scripts/update/generate-manifest.py --apk release/catching-0.6.9-release.apk --apk-url "$UPDATE_APK_URL" --build-tools "$ANDROID_HOME/build-tools/35.0.0" --output release/update.json
+        run: python3 scripts/update/generate-manifest.py --apk release/catching-0.6.10-release.apk --apk-url "$UPDATE_APK_URL" --build-tools "$ANDROID_HOME/build-tools/35.0.0" --output release/update.json
       - name: Ограничить размер подписанного release artifact
         run: |
           bytes=$(du -sb release | cut -f1)
@@ -144,7 +148,7 @@ jobs:
             adb shell pm grant ru.bruce.dispatcherinbox android.permission.RECORD_AUDIO
             adb shell svc wifi disable
             adb shell svc data disable
-            timeout 360s adb shell am instrument -w -e class ru.bruce.dispatcherinbox.DriveConnectionTest,ru.bruce.dispatcherinbox.CaptureIntegrationTest,ru.bruce.dispatcherinbox.AssistantIntegrationTest,ru.bruce.dispatcherinbox.LocalCommitUiTest,ru.bruce.dispatcherinbox.UpdateRecoveryTest ru.bruce.dispatcherinbox.test/androidx.test.runner.AndroidJUnitRunner | tee instrumentation.txt
+            timeout 360s adb shell am instrument -w -e class ru.bruce.dispatcherinbox.DriveConnectionTest,ru.bruce.dispatcherinbox.CaptureIntegrationTest,ru.bruce.dispatcherinbox.AssistantIntegrationTest,ru.bruce.dispatcherinbox.LocalCommitUiTest,ru.bruce.dispatcherinbox.RecordingLevelUiTest,ru.bruce.dispatcherinbox.TabTransitionTest,ru.bruce.dispatcherinbox.UpdateRecoveryTest ru.bruce.dispatcherinbox.test/androidx.test.runner.AndroidJUnitRunner | tee instrumentation.txt
             adb logcat -d > logcat.txt
             adb shell dumpsys activity exit-info ru.bruce.dispatcherinbox > exit-info.txt
             adb shell dumpsys activity processes > processes.txt
@@ -156,7 +160,7 @@ jobs:
             adb logcat -d > logcat.txt
             adb pull /sdcard/Android/data/ru.bruce.dispatcherinbox/files/catching-evidence ./evidence || true
             grep -q 'OK (' restart.txt
-            UPGRADE_LABELS=v068 scripts/upgrade/install-over.sh
+            UPGRADE_LABELS=v069 scripts/upgrade/install-over.sh
             adb install -r apk/release/app-release.apk
             adb shell am start -n ru.bruce.dispatcherinbox/.MainActivity
             adb shell dumpsys package ru.bruce.dispatcherinbox > installed-package.txt
@@ -164,9 +168,9 @@ jobs:
         if: steps.android-qa.outcome == 'success'
         run: |
           cd release
-          sha256sum catching-0.6.9-unsigned.apk > unsigned-SHA256.txt
-          rm catching-0.6.9-unsigned.apk
-          sha256sum catching-0.6.9-release.apk > SHA256SUMS
+          sha256sum catching-0.6.10-unsigned.apk > unsigned-SHA256.txt
+          rm catching-0.6.10-unsigned.apk
+          sha256sum catching-0.6.10-release.apk > SHA256SUMS
       - name: Проверить бюджет перед публикацией подписанного release APK
         id: release-artifact-budget
         if: github.event_name == 'workflow_dispatch' && inputs.publish_release_artifact && steps.android-qa.outcome == 'success'
@@ -179,7 +183,7 @@ jobs:
         if: github.event_name == 'workflow_dispatch' && inputs.publish_release_artifact && steps.android-qa.outcome == 'success' && steps.release-artifact-budget.outcome == 'success'
         uses: actions/upload-artifact@v4
         with:
-          name: catching-0.6.9-release
+          name: catching-0.6.10-release
           path: release/
           if-no-files-found: error
           retention-days: 30
@@ -187,9 +191,19 @@ jobs:
         if: always()
         run: |
           mkdir -p visual-proof
-          for path in evidence/logo-*.png evidence/logo-*.xml evidence/ui-regression-*.png evidence/ui-regression-*.xml instrumentation.txt restart.txt installed-package.txt release/source-head.txt release/certificate.txt release/package.txt upgrade-evidence/*-verify.txt upgrade-evidence/*-before-upgrade.txt upgrade-evidence/v2-debug-writer-*.txt; do
+          for path in evidence/meter-*.png evidence/meter-*.txt instrumentation.txt restart.txt installed-package.txt release/source-head.txt release/certificate.txt release/package.txt upgrade-evidence/*-verify.txt upgrade-evidence/*-before-upgrade.txt upgrade-evidence/v2-debug-writer-*.txt; do
             [ ! -f "$path" ] || cp "$path" visual-proof/
           done
+          python3 - <<'PYTHON'
+          import json, pathlib, xml.etree.ElementTree as ET
+          suites = [ET.parse(p).getroot() for p in pathlib.Path('app/build/test-results').rglob('TEST-*.xml')]
+          pathlib.Path('visual-proof/unit-summary.json').write_text(json.dumps({
+              'tests': sum(int(s.get('tests', 0)) for s in suites),
+              'failures': sum(int(s.get('failures', 0)) for s in suites),
+              'errors': sum(int(s.get('errors', 0)) for s in suites),
+              'suites': [{k: s.get(k) for k in ('name', 'tests', 'failures', 'errors')} for s in suites],
+          }, indent=2))
+          PYTHON
           test "$(du -sb visual-proof | cut -f1)" -le $((5 * 1024 * 1024))
       - name: Проверить прежний бюджет компактных доказательств
         id: compact-proof-budget
@@ -203,7 +217,7 @@ jobs:
         if: always() && steps.compact-proof-budget.outcome == 'success'
         uses: actions/upload-artifact@v4
         with:
-          name: оформление-0.6.9
+          name: уровень-и-навигация-0.6.10
           path: visual-proof/
           retention-days: 1
       - name: Ограничить размер device QA evidence
@@ -336,7 +350,7 @@ jobs:
             adb shell pm grant ru.bruce.dispatcherinbox android.permission.RECORD_AUDIO
             adb shell svc wifi disable
             adb shell svc data disable
-            timeout 360s adb shell am instrument -w -e class ru.bruce.dispatcherinbox.DriveConnectionTest,ru.bruce.dispatcherinbox.CaptureIntegrationTest,ru.bruce.dispatcherinbox.AssistantIntegrationTest,ru.bruce.dispatcherinbox.LocalCommitUiTest,ru.bruce.dispatcherinbox.UpdateRecoveryTest ru.bruce.dispatcherinbox.test/androidx.test.runner.AndroidJUnitRunner | tee instrumentation.txt
+            timeout 360s adb shell am instrument -w -e class ru.bruce.dispatcherinbox.DriveConnectionTest,ru.bruce.dispatcherinbox.CaptureIntegrationTest,ru.bruce.dispatcherinbox.AssistantIntegrationTest,ru.bruce.dispatcherinbox.LocalCommitUiTest,ru.bruce.dispatcherinbox.RecordingLevelUiTest,ru.bruce.dispatcherinbox.TabTransitionTest,ru.bruce.dispatcherinbox.UpdateRecoveryTest ru.bruce.dispatcherinbox.test/androidx.test.runner.AndroidJUnitRunner | tee instrumentation.txt
             adb logcat -d > logcat.txt
             adb shell dumpsys activity exit-info ru.bruce.dispatcherinbox > exit-info.txt
             adb shell dumpsys activity processes > processes.txt
@@ -348,7 +362,7 @@ jobs:
             adb logcat -d > logcat.txt
             adb pull /sdcard/Android/data/ru.bruce.dispatcherinbox/files/catching-evidence ./evidence || true
             grep -q 'OK (' restart.txt
-            UPGRADE_LABELS=v068 scripts/upgrade/install-over.sh
+            UPGRADE_LABELS=v069 scripts/upgrade/install-over.sh
             adb install -r apk/release/app-release.apk
             adb shell am start -n ru.bruce.dispatcherinbox/.MainActivity
             adb shell dumpsys package ru.bruce.dispatcherinbox > installed-package.txt
@@ -407,7 +421,7 @@ jobs:
           import json, hashlib, subprocess, zipfile
           from pathlib import Path
           r=json.load(open('source-run.json'))
-          a=[a for a in json.load(open('source-artifacts.json'))['artifacts'] if a['name']=='catching-0.6.9-release' and not a['expired']]
+          a=[a for a in json.load(open('source-artifacts.json'))['artifacts'] if a['name']=='catching-0.6.10-release' and not a['expired']]
           assert len(a)==1
           a=a[0]
           with open('exact-release.zip','wb') as f:
@@ -439,6 +453,6 @@ jobs:
       - name: Сохранить компактные визуальные доказательства
         uses: actions/upload-artifact@v4
         with:
-          name: снимки-release-0.6.9
+          name: снимки-release-0.6.10
           path: visual/
           retention-days: 1

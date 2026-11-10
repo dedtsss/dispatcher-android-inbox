@@ -1,5 +1,7 @@
 # Catching: физические UX-регрессии, 10.11.2026
 
+> Продолжение физической приёмки: владелец установил 0.6.9 через встроенный updater и подтвердил закрытие панели после голоса. Updater уже 0.6.9 (изменён владельцем после отчёта ниже). Новые индикатор/переходы и текущий handoff: [история уровня](catching-level-meter-2026-11-10.md). Исторические результаты ниже сохранены.
+
 Issue #7 / PR #8, единственный исполнитель, ветка `issue-7-drive-inbox`. Baseline: `f4c3ae3a987aecb0bbf448ba4aabffdedefc6df4`, local/remote совпали, рабочее дерево было чистым. Источник: комментарий владельца https://github.com/dedtsss/dispatcher-android-inbox/pull/8#issuecomment-6757097108 и уточнение о сохранении Kotlin/Compose/Material3. Прочитаны актуальные §7, AGENTS.md, memory README и предшествующий handoff.
 
 ## Обновление фактов Drive

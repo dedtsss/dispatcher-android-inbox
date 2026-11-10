@@ -36,6 +36,7 @@ data class CaptureUiState(
     val assistantOpenMode: String? = null,
     val autoStartAssistantRecording: Boolean = false,
     val recordingAmplitude: Float = 0f,
+    val recordingLevels: List<Float> = RecordingLevelMeter.emptyHistory(),
     val isBusy: Boolean = false,
     val statusMessage: String? = null,
     val isError: Boolean = false,
@@ -48,8 +49,12 @@ class CaptureViewModel(
     private val repository: InboxRepository,
     settingsRepository: SettingsRepository,
     private val source: String,
+    amplitudeSource: (() -> Int)? = null,
 ) : AndroidViewModel(application) {
     private val recorder = VoiceRecorder(application)
+    // Подмена доступна только конструктору теста; штатная Factory всегда читает MediaRecorder.
+    private val readAmplitude = amplitudeSource ?: recorder::currentAmplitude
+    private val levelMeter = RecordingLevelMeter()
     private val audioFeedback = AudioFeedbackManager()
     private val localState = MutableStateFlow(CaptureUiState())
     private val committedId = MutableStateFlow<String?>(null)
@@ -145,9 +150,11 @@ class CaptureViewModel(
         runCatching {
             recorder.start(repository.newVoiceFile())
             audioFeedback.playStartSound()
+            levelMeter.reset()
             localState.value = localState.value.copy(
                 isRecording = true,
                 recordingAmplitude = 0f,
+                recordingLevels = RecordingLevelMeter.emptyHistory(),
                 recordingSeconds = 0,
                 statusMessage = "Идёт запись",
                 isError = false,
@@ -157,13 +164,13 @@ class CaptureViewModel(
             amplitudeJob?.cancel()
             amplitudeJob = viewModelScope.launch {
                 while (localState.value.isRecording) {
-                    val raw = recorder.currentAmplitude().coerceIn(0, 32767)
-                    val level = (kotlin.math.ln(1.0 + raw) / kotlin.math.ln(32768.0)).toFloat()
+                    val measured = levelMeter.sample(readAmplitude())
                     localState.value = localState.value.copy(
-                        recordingAmplitude = localState.value.recordingAmplitude * 0.65f + level * 0.35f,
+                        recordingAmplitude = measured.level,
+                        recordingLevels = measured.history,
                         recordingSeconds = (android.os.SystemClock.elapsedRealtime() - started) / 1000,
                     )
-                    kotlinx.coroutines.delay(100)
+                    kotlinx.coroutines.delay(RecordingLevelMeter.SAMPLE_INTERVAL_MS)
                 }
             }
         }.onFailure {
@@ -175,9 +182,11 @@ class CaptureViewModel(
     fun stopRecordingAndSave() {
         if (!localState.value.isRecording) return
         amplitudeJob?.cancel()
+        levelMeter.reset()
         localState.value = localState.value.copy(
             isRecording = false,
             recordingAmplitude = 0f,
+            recordingLevels = RecordingLevelMeter.emptyHistory(),
             isBusy = true,
         )
         viewModelScope.launch {
@@ -232,10 +241,12 @@ class CaptureViewModel(
 
     private fun showError(message: String) {
         amplitudeJob?.cancel()
+        levelMeter.reset()
         localState.value = localState.value.copy(
             isBusy = false,
             isRecording = false,
             recordingAmplitude = 0f,
+            recordingLevels = RecordingLevelMeter.emptyHistory(),
             statusMessage = message,
             isError = true,
         )

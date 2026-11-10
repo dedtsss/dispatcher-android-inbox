@@ -20,8 +20,8 @@ android {
         applicationId = "ru.bruce.dispatcherinbox"
         minSdk = 26
         targetSdk = 36
-        versionCode = 15
-        versionName = "0.6.9"
+        versionCode = 16
+        versionName = "0.6.10"
         val suppliedUpdateUrl = providers.gradleProperty("updateManifestUrl").orNull.orEmpty().trim()
         val updateUrl = suppliedUpdateUrl.ifBlank { "https://raw.githubusercontent.com/dedtsss/dispatcher-android-inbox/main/updates/update.json" }
         if (updateUrl.isNotEmpty()) {
@@ -96,6 +96,7 @@ dependencies {
 
     implementation(composeBom)
     androidTestImplementation(composeBom)
+    androidTestImplementation("androidx.compose.ui:ui-test-junit4")
 
     implementation("androidx.core:core-ktx:1.16.0")
     implementation("androidx.activity:activity-compose:1.10.1")

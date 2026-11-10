@@ -4,9 +4,6 @@ import android.Manifest
 import android.content.pm.PackageManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.tween
-import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.layout.wrapContentHeight
@@ -73,6 +70,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -245,8 +243,7 @@ fun CaptureScreen(
 
 @Composable
 private fun VoiceControl(state: CaptureUiState, compact: Boolean, onClick: () -> Unit) {
-    val amplitude by animateFloatAsState(if (state.isRecording) state.recordingAmplitude else 0f,
-        animationSpec = tween(180, easing = FastOutSlowInEasing), label = "Амплитуда")
+    val amplitude = if (state.isRecording) state.recordingAmplitude else 0f
     val primary = MaterialTheme.colorScheme.onPrimaryContainer
     Column(Modifier.fillMaxWidth().padding(top = 8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
         Box(Modifier.size(if (compact) 132.dp else 156.dp).background(
@@ -264,17 +261,8 @@ private fun VoiceControl(state: CaptureUiState, compact: Boolean, onClick: () ->
         }
         Text(if (state.isRecording) "%02d:%02d".format(state.recordingSeconds / 60, state.recordingSeconds % 60) else "Голос",
             style = MaterialTheme.typography.titleMedium)
-        Canvas(Modifier.width(120.dp).height(24.dp)) {
-            val path = androidx.compose.ui.graphics.Path()
-            for (x in 0..80) {
-                val t = x / 80f
-                val y = size.height / 2 + kotlin.math.sin(t * kotlin.math.PI * 4).toFloat() *
-                    kotlin.math.sin(t * kotlin.math.PI).toFloat() * amplitude * size.height * 0.32f
-                if (x == 0) path.moveTo(0f, y) else path.lineTo(t * size.width, y)
-            }
-            drawPath(path, primary.copy(alpha = if (state.isRecording) 0.7f else 0.2f),
-                style = androidx.compose.ui.graphics.drawscope.Stroke(width = 1.5.dp.toPx(), cap = androidx.compose.ui.graphics.StrokeCap.Round))
-        }
+        RecordingLevelIndicator(state.recordingLevels, amplitude, state.isRecording, primary)
+
     }
 }
 
@@ -459,3 +447,24 @@ private val journalTimeFormatter = DateTimeFormatter.ofPattern("dd.MM HH:mm")
     .withZone(ZoneId.systemDefault())
 
 private fun formatTime(timestamp: Long): String = journalTimeFormatter.format(Instant.ofEpochMilli(timestamp))
+
+@Composable
+private fun RecordingLevelIndicator(history: List<Float>, level: Float, recording: Boolean, color: Color) {
+    Canvas(Modifier.width(120.dp).height(24.dp).semantics {
+        contentDescription = "Уровень микрофона"
+        stateDescription = if (recording) "Запись · ${(level * 100).toInt()}%" else "Запись остановлена"
+    }) {
+        val slot = size.width / RecordingLevelMeter.HISTORY_SIZE
+        drawLine(color.copy(alpha = 0.2f), androidx.compose.ui.geometry.Offset(0f, size.height / 2),
+            androidx.compose.ui.geometry.Offset(size.width, size.height / 2), strokeWidth = 1.dp.toPx())
+        if (recording) history.forEachIndexed { index, value ->
+            if (value > 0f) {
+                val height = (value.coerceIn(0f, 1f) * size.height * 0.92f).coerceAtLeast(1.dp.toPx())
+                drawRoundRect(color.copy(alpha = 0.85f),
+                    topLeft = androidx.compose.ui.geometry.Offset(index * slot + (slot - 2.dp.toPx()) / 2, (size.height - height) / 2),
+                    size = androidx.compose.ui.geometry.Size(2.dp.toPx(), height),
+                    cornerRadius = androidx.compose.ui.geometry.CornerRadius(1.dp.toPx()))
+            }
+        }
+    }
+}
