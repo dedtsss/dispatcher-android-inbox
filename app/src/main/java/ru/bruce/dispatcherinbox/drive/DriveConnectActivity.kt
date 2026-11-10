@@ -66,7 +66,7 @@ class DriveConnectActivity : ComponentActivity() {
                             Button(onClick = ::restartFlow) { Text("Выбрать аккаунт и повторить") }
                             Text("Подробности доступны в настройках: «Диагностика подключения»")
                         }
-                        TextButton(onClick = { if (ui.phase != ConnectionPhase.CONNECTED) model.flow.cancel(); finish() }) { Text(if (ui.phase == ConnectionPhase.CONNECTED) "Готово" else "Вернуться к записям") }
+                        TextButton(colors = androidx.compose.material3.ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.onSurfaceVariant), onClick = { if (ui.phase != ConnectionPhase.CONNECTED) model.flow.cancel(); finish() }) { Text(if (ui.phase == ConnectionPhase.CONNECTED) "Готово" else "Вернуться к записям") }
                     }
                 }
             }

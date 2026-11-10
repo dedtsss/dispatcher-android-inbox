@@ -88,13 +88,13 @@ private fun QueueCard(
             }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 if (item.status == InboxStatus.ERROR || item.status == InboxStatus.QUEUED) {
-                    OutlinedButton(onClick = { if (delivery.waitingForDrive) onConnect() else onRetry(item.id) }) {
+                    OutlinedButton(colors = androidx.compose.material3.ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.onSurface), onClick = { if (delivery.waitingForDrive) onConnect() else onRetry(item.id) }) {
                         Icon(Icons.Default.Refresh, contentDescription = null)
                         Text(if (delivery.waitingForDrive) "Подключить Drive" else if (item.status == InboxStatus.ERROR) "Повторить" else "Отправить")
                     }
                 }
                 if (item.status != InboxStatus.SYNCING) {
-                    TextButton(onClick = { onDelete(item.id) }) {
+                    TextButton(colors = androidx.compose.material3.ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.onSurfaceVariant), onClick = { onDelete(item.id) }) {
                         Icon(Icons.Default.DeleteOutline, contentDescription = null)
                         Text("Удалить локально")
                     }

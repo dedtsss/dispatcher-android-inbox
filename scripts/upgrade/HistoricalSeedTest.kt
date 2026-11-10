@@ -4,6 +4,7 @@ import androidx.room.Room
 import androidx.test.platform.app.InstrumentationRegistry
 import org.junit.Test
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.flow.first
 import ru.bruce.dispatcherinbox.data.SettingsRepository
 import ru.bruce.dispatcherinbox.data.InboxDatabase
 import java.io.File
@@ -68,11 +69,22 @@ class HistoricalSeedTest {
         val hasDrive = db.query("SELECT name FROM sqlite_master WHERE name='drive_checkpoints'").use { it.moveToFirst() }
         if (hasDrive) db.execSQL("INSERT INTO drive_checkpoints VALUES ('upgrade/account', 'reserved-drive-id')")
         room.close()
+        if (InstrumentationRegistry.getArguments().getString("historicalDriveAccount") == "true") {
+            // Синтетическая настройка для install-over; не выдаём её за настоящий OAuth grant.
+            SettingsRepository(context).setDriveAccount("migration@example.test")
+            SettingsRepository(context).setDriveStatus("Подключён · Catching/Inbox")
+        }
         verifyWithHistoricalRoom()
     }
 
     @Test fun verifyWithHistoricalRoom() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
+        if (InstrumentationRegistry.getArguments().getString("historicalDriveAccount") == "true") runBlocking {
+            val settings = SettingsRepository(context).settings.first()
+            org.junit.Assert.assertEquals("migration@example.test", settings.driveAccount)
+            org.junit.Assert.assertEquals("Подключён · Catching/Inbox", settings.driveStatus)
+            org.junit.Assert.assertFalse(settings.autoSync)
+        }
         val room = Room.databaseBuilder(context, InboxDatabase::class.java, "dispatcher-inbox.db").build()
         try {
             for (status in listOf("queued", "error", "synced")) {

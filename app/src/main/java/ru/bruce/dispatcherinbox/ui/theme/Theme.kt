@@ -9,21 +9,23 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 
 private val CatchingColors = darkColorScheme(
-    primary = Color(0xFFC4B5E4),
-    onPrimary = Color(0xFF292334),
-    primaryContainer = Color(0xFF393044),
-    onPrimaryContainer = Color(0xFFE7DBFA),
-    secondary = Color(0xFFC7C1D1),
-    secondaryContainer = Color(0xFF302E36),
-    onSecondaryContainer = Color(0xFFE4DFEC),
-    background = Color(0xFF15151A),
-    surface = Color(0xFF1B1B21),
-    surfaceVariant = Color(0xFF292930),
-    surfaceContainer = Color(0xFF222229),
-    onSurface = Color(0xFFF1EDF6),
-    onSurfaceVariant = Color(0xFFCBC5D2),
-    outline = Color(0xFF948D9D),
-    outlineVariant = Color(0xFF45404C),
+    primary = Color(0xFF705C8A),
+    onPrimary = Color(0xFFF4F0F8),
+    primaryContainer = Color(0xFF2D263B),
+    onPrimaryContainer = Color(0xFFD6CFDF),
+    onSecondary = Color(0xFF191A20),
+    tertiary = Color(0xFFB7B7C0),
+    secondary = Color(0xFFAAA4B1),
+    secondaryContainer = Color(0xFF2A2831),
+    onSecondaryContainer = Color(0xFFE4E0EB),
+    background = Color(0xFF121318),
+    surface = Color(0xFF191A20),
+    surfaceVariant = Color(0xFF24252C),
+    surfaceContainer = Color(0xFF202128),
+    onSurface = Color(0xFFECECEF),
+    onSurfaceVariant = Color(0xFFB7B7C0),
+    outline = Color(0xFF73727E),
+    outlineVariant = Color(0xFF393943),
 )
 
 @Composable

@@ -3,6 +3,7 @@ package ru.bruce.dispatcherinbox
 import androidx.room.Room
 import androidx.test.platform.app.InstrumentationRegistry
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.flow.first
 import org.junit.Assert.*
 import org.junit.Test
 import ru.bruce.dispatcherinbox.data.InboxDatabase
@@ -13,6 +14,12 @@ class MigrationTest {
     @Test fun actualInstallOverPreservesData() = runBlocking<Unit> {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val args = InstrumentationRegistry.getArguments()
+        if (args.getString("historicalDriveAccount") == "true") {
+            val settings = ru.bruce.dispatcherinbox.data.SettingsRepository(context).settings.first()
+            assertEquals("migration@example.test", settings.driveAccount)
+            assertEquals("Подключён · Catching/Inbox", settings.driveStatus)
+            assertFalse(settings.autoSync)
+        }
         val room = Room.databaseBuilder(context, InboxDatabase::class.java, "dispatcher-inbox.db")
             .addMigrations(InboxDatabase.MIGRATION_1_3, InboxDatabase.MIGRATION_2_3).build()
         try {

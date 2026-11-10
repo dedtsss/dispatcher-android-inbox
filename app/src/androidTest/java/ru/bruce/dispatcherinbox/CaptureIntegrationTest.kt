@@ -136,8 +136,8 @@ class CaptureIntegrationTest {
         val assistant = container.dao.getPending().last()
         assertEquals(InboxSource.ASSISTANT, assistant.item.source)
         assertTrue(File(assistant.attachments.single().localPath).length() > 0)
-        screenshot("03-assistant-saved")
-        device.pressBack()
+        assertTrue(device.wait(Until.gone(By.desc("Закрыть ассистент")), 10000))
+        screenshot("03-assistant-returned")
 
         // Состояние syncing и зарезервированный Drive ID переживают новое соединение Room.
         container.dao.updateStatus(savedText.id, InboxStatus.SYNCING, System.currentTimeMillis(), null)

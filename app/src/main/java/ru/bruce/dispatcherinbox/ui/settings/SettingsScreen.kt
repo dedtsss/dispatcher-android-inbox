@@ -65,7 +65,7 @@ fun SettingsScreen(
                 Text(settings.driveAccount.ifBlank { "Аккаунт не выбран" })
                 Text(settings.driveStatus, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 var diagnosticsExpanded by remember { mutableStateOf(false) }
-                androidx.compose.material3.TextButton(onClick = { diagnosticsExpanded = !diagnosticsExpanded }) { Text("Диагностика подключения") }
+                androidx.compose.material3.TextButton(colors = androidx.compose.material3.ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.onSurfaceVariant), onClick = { diagnosticsExpanded = !diagnosticsExpanded }) { Text("Диагностика подключения") }
                 if (diagnosticsExpanded) androidx.compose.foundation.text.selection.SelectionContainer {
                     Text(settings.driveDiagnostics.ifBlank { "Диагностика появится после попытки подключения" }, style = MaterialTheme.typography.bodySmall)
                 }
@@ -79,7 +79,7 @@ fun SettingsScreen(
         }
         SettingSwitch("Автосинхронизация", settings.autoSync, viewModel::setAutoSync)
         SettingSwitch("Только по Wi-Fi", settings.wifiOnly, viewModel::setWifiOnly)
-        SettingSwitch("Закрывать после сохранения", settings.closeAfterSave, viewModel::setCloseAfterSave)
+        Text("Панель ассистента закрывается сразу после сохранения на телефоне", style = MaterialTheme.typography.bodySmall)
         HorizontalDivider()
         Text("Открывать по умолчанию", style = MaterialTheme.typography.titleMedium)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -113,10 +113,10 @@ fun SettingsScreen(
         Button(onClick = onRequestAssistantRole, modifier = Modifier.fillMaxWidth()) {
             Text("Запросить роль ассистента")
         }
-        OutlinedButton(onClick = onOpenAssistantSettings, modifier = Modifier.fillMaxWidth()) {
+        OutlinedButton(colors = androidx.compose.material3.ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.onSurface), onClick = onOpenAssistantSettings, modifier = Modifier.fillMaxWidth()) {
             Text("Открыть выбор ассистента")
         }
-        OutlinedButton(onClick = onOpenDefaultAppsSettings, modifier = Modifier.fillMaxWidth()) {
+        OutlinedButton(colors = androidx.compose.material3.ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.onSurface), onClick = onOpenDefaultAppsSettings, modifier = Modifier.fillMaxWidth()) {
             Text("Открыть приложения по умолчанию")
         }
         HorizontalDivider()

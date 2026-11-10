@@ -29,3 +29,13 @@ internal class CatchingLogoPainter(private val original: Painter, textColor: Col
         clipRect(dotLeft, dotTop, dotRight, dotBottom) { with(original) { draw(size) } }
     }
 }
+
+// Голова из того же оригинала: правая граница проходит по прозрачному зазору.
+internal class CatchingCatPainter(private val original: Painter) : Painter() {
+    override val intrinsicSize = Size(250f, 210f)
+    override fun DrawScope.onDraw() {
+        clipRect {
+            with(original) { draw(Size(size.width * 890f / 250f, size.height)) }
+        }
+    }
+}

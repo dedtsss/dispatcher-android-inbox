@@ -29,7 +29,16 @@ class AssistantIntegrationTest {
             ) { with(painter) { draw(size) } }
             return image.asAndroidBitmap()
         }
+        val headImage = androidx.compose.ui.graphics.ImageBitmap(250, 210)
+        androidx.compose.ui.graphics.drawscope.CanvasDrawScope().draw(
+            androidx.compose.ui.unit.Density(1f), androidx.compose.ui.unit.LayoutDirection.Ltr,
+            androidx.compose.ui.graphics.Canvas(headImage), androidx.compose.ui.geometry.Size(250f, 210f),
+        ) { with(ru.bruce.dispatcherinbox.ui.capture.CatchingCatPainter(source)) { draw(size) } }
+        val head = headImage.asAndroidBitmap()
         val reference = render(source)
+        for (y in 0 until 210) for (x in 0 until 250) {
+            assertEquals("Изменены пиксели головы $x,$y", reference.getPixel(x, y), head.getPixel(x, y))
+        }
         val result = render(ru.bruce.dispatcherinbox.ui.capture.CatchingLogoPainter(source, androidx.compose.ui.graphics.Color(0xFFF1EDF6)))
         var transparent = 0
         var letters = 0
@@ -73,11 +82,12 @@ class AssistantIntegrationTest {
             val corner = screenshot.getPixel(logo.left + (4 * density).toInt(), logo.top + (4 * density).toInt())
             assertTrue("Вокруг логотипа появилась светлая плашка", android.graphics.Color.red(corner) < 60 && android.graphics.Color.green(corner) < 60 && android.graphics.Color.blue(corner) < 60)
             screenshot.recycle()
-            assertTrue("Логотип превышает ограничение ширины: $logo", logo.width() <= (if (compact) 184 else 208) * density + 2)
+            assertTrue("Логотип превышает ограничение ширины: $logo", logo.width() <= (if (compact) 48 else 208) * density + 2)
             // В панели clickable объединяет всю область; у Image главного экрана bounds исключают padding 8dp.
             val expectedHeight = (if (compact) 48 else 40) * density
             assertTrue("Неверная высота области логотипа: $logo", kotlin.math.abs(logo.height() - expectedHeight) <= 2)
             if (compact) {
+                assertTrue("Голова кота не по центру", kotlin.math.abs(logo.centerX() - device.displayWidth / 2) <= 2)
                 for (label in listOf("Закрыть ассистент", "Настройки ассистента")) {
                     val icon = device.findObject(By.desc(label))
                     val target = if (icon.isClickable) icon else icon.parent
@@ -179,6 +189,8 @@ class AssistantIntegrationTest {
             kotlinx.coroutines.withTimeout(10000) {
                 while (dao.getPending().none { entry -> entry.item.text == marker && entry.item.source == "assistant" }) kotlinx.coroutines.delay(100)
             }
+            assertTrue(device.wait(Until.gone(By.desc("Закрыть ассистент")), 10000))
+            assertEquals(1, dao.getPending().count { it.item.text == marker })
         }
         settings.setAssistantOpenMode("voice")
         settings.setAutoStartAssistantRecording(false)
@@ -193,7 +205,7 @@ class AssistantIntegrationTest {
             assertTrue(device.wait(Until.hasObject(By.text(java.util.regex.Pattern.compile("(?!00:00)\\d{2}:\\d{2}"))), 5000))
             screenshot("06-assistant-manual-recording")
             device.findObject(By.desc("Остановить и сохранить")).click()
-            assertTrue(device.wait(Until.hasObject(By.desc("Начать запись").enabled(true)), 10000))
+            assertTrue(device.wait(Until.gone(By.desc("Закрыть ассистент")), 10000))
         }
         settings.setAutoStartAssistantRecording(true)
         ActivityScenario.launch<AssistantEntryActivity>(intent).use {
@@ -201,7 +213,7 @@ class AssistantIntegrationTest {
             Thread.sleep(1500)
             screenshot("07-assistant-auto-recording")
             device.findObject(By.desc("Остановить и сохранить")).click()
-            assertTrue(device.wait(Until.hasObject(By.desc("Начать запись").enabled(true)), 10000))
+            assertTrue(device.wait(Until.gone(By.desc("Закрыть ассистент")), 10000))
         }
     }
 }

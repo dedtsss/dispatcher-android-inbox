@@ -7,12 +7,14 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -50,19 +52,18 @@ class CaptureViewModel(
     private val recorder = VoiceRecorder(application)
     private val audioFeedback = AudioFeedbackManager()
     private val localState = MutableStateFlow(CaptureUiState())
-    private val closeEvents = Channel<Unit>(Channel.BUFFERED)
+    private val committedId = MutableStateFlow<String?>(null)
     private var amplitudeJob: kotlinx.coroutines.Job? = null
-    private var closeAfterSave = false
     private var lastSavedId: String? = null
 
-    val close = closeEvents.receiveAsFlow()
+    // StateFlow повторит commit новой Activity после конфигурационной смены/возврата в STARTED.
+    val close = committedId.filterNotNull().filter { source == InboxSource.ASSISTANT }.map { Unit }
 
     val state: StateFlow<CaptureUiState> = combine(
         localState,
         settingsRepository.settings,
         repository.items,
     ) { local, settings, items ->
-        closeAfterSave = settings.closeAfterSave
         val saved = lastSavedId?.let { id -> items.firstOrNull { it.item.id == id } }
         val waitingForDrive = settings.driveAccount.isBlank() && saved != null && saved.item.status != InboxStatus.SYNCED
         val syncMessage = if (waitingForDrive) "На телефоне · Ждёт Drive" else when (saved?.item?.status) {
@@ -139,7 +140,7 @@ class CaptureViewModel(
     }
 
     fun startRecording() {
-        if (localState.value.isRecording || localState.value.isBusy) return
+        if (localState.value.isRecording || localState.value.isBusy || committedId.value != null && source == InboxSource.ASSISTANT) return
         lastSavedId = null
         runCatching {
             recorder.start(repository.newVoiceFile())
@@ -198,8 +199,11 @@ class CaptureViewModel(
     }
 
     fun save() {
-        if (localState.value.isBusy || localState.value.isRecording) return
-        viewModelScope.launch { saveInternal(localState.value.attachments) }
+        if (localState.value.isBusy || localState.value.isRecording || committedId.value != null && source == InboxSource.ASSISTANT) return
+        val drafts = localState.value.attachments
+        // Синхронно закрываем окно повторного нажатия до запуска coroutine.
+        localState.value = localState.value.copy(isBusy = true)
+        viewModelScope.launch { saveInternal(drafts) }
     }
 
     private suspend fun saveInternal(drafts: List<AttachmentDraft>) {
@@ -209,16 +213,21 @@ class CaptureViewModel(
             return
         }
         localState.value = localState.value.copy(attachments = drafts, isBusy = true, statusMessage = "Сохраняем…")
-        runCatching { repository.save(text, drafts, source) }
-            .onSuccess { item ->
-                lastSavedId = item.id
-                localState.value = CaptureUiState(
-                    statusMessage = "В очереди",
-                    defaultOpenMode = localState.value.defaultOpenMode,
-                )
-                if (closeAfterSave) closeEvents.trySend(Unit)
+        try {
+            // Завершение Activity после commit не должно отменить очистку/постановку WorkManager.
+            withContext(NonCancellable) {
+                repository.save(text, drafts, source, onLocalCommit = { item ->
+                    lastSavedId = item.id
+                    localState.value = CaptureUiState(
+                        statusMessage = "На телефоне · В очереди",
+                        defaultOpenMode = localState.value.defaultOpenMode,
+                    )
+                    committedId.value = item.id
+                })
             }
-            .onFailure { showError(it.message ?: "Не удалось сохранить запись") }
+        } catch (error: Exception) {
+            showError(error.message ?: "Не удалось сохранить запись")
+        }
     }
 
     private fun showError(message: String) {

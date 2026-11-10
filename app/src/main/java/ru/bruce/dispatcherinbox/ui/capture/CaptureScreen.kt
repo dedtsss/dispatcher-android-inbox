@@ -80,6 +80,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.repeatOnLifecycle
 import ru.bruce.dispatcherinbox.data.AttachmentDraft
 import ru.bruce.dispatcherinbox.data.InboxItemWithAttachments
 import ru.bruce.dispatcherinbox.data.InboxStatus
@@ -102,6 +103,7 @@ fun CaptureScreen(
     val originalLogo = painterResource(R.drawable.catching_logo)
     val logoTextColor = MaterialTheme.colorScheme.onSurface
     val transparentLogo = remember(originalLogo, logoTextColor) { CatchingLogoPainter(originalLogo, logoTextColor) }
+    val cat = remember(originalLogo) { CatchingCatPainter(originalLogo) }
     val context = LocalContext.current
     var textExpanded by rememberSaveable { mutableStateOf(false) }
     val focusRequester = remember { FocusRequester() }
@@ -142,7 +144,12 @@ fun CaptureScreen(
             keyboard?.show()
         }
     }
-    LaunchedEffect(viewModel) { viewModel.close.collect { onClose() } }
+    val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
+    LaunchedEffect(viewModel, compact, lifecycleOwner) {
+        if (compact) lifecycleOwner.lifecycle.repeatOnLifecycle(androidx.lifecycle.Lifecycle.State.STARTED) {
+            viewModel.close.collect { onClose() }
+        }
+    }
 
     Column(
         modifier = modifier
@@ -151,36 +158,37 @@ fun CaptureScreen(
             .verticalScroll(rememberScrollState())
             .padding(horizontal = if (compact) 18.dp else 20.dp, vertical = 14.dp),
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth().height(if (compact) 56.dp else 64.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Box(Modifier.weight(1f), contentAlignment = if (compact) Alignment.CenterStart else Alignment.Center) {
-                Image(
-                    transparentLogo, contentDescription = "Catching",
-                    contentScale = androidx.compose.ui.layout.ContentScale.Fit,
-                    modifier = Modifier.widthIn(max = if (compact) 184.dp else 208.dp)
-                        .fillMaxWidth().height(if (compact) 48.dp else 56.dp)
-                        .then(if (compact) Modifier.clickable(onClick = onOpenApp) else Modifier)
-                        .padding(8.dp),
-                )
-            }
+        Box(Modifier.fillMaxWidth().height(if (compact) 56.dp else 64.dp), contentAlignment = Alignment.Center) {
             if (compact) {
-                IconButton(onClick = onClose) { Icon(Icons.Default.Close, "Закрыть ассистент") }
-                IconButton(onClick = onOpenSettings) { Icon(Icons.Default.Settings, "Настройки ассистента") }
+                IconButton(onClick = onClose, modifier = Modifier.align(Alignment.CenterStart).size(48.dp)) {
+                    Icon(Icons.Default.Close, "Закрыть ассистент")
+                }
+                Image(cat, contentDescription = "Catching", contentScale = androidx.compose.ui.layout.ContentScale.Fit,
+                    modifier = Modifier.size(48.dp).clickable(onClick = onOpenApp).padding(2.dp))
+                IconButton(onClick = onOpenSettings, modifier = Modifier.align(Alignment.CenterEnd).size(48.dp)) {
+                    Icon(Icons.Default.Settings, "Настройки ассистента")
+                }
+            } else {
+                Image(transparentLogo, contentDescription = "Catching",
+                    contentScale = androidx.compose.ui.layout.ContentScale.Fit,
+                    modifier = Modifier.widthIn(max = 208.dp).fillMaxWidth().height(56.dp).padding(8.dp))
             }
         }
         if (!compact) Text("Сначала на телефоне · затем в Google Drive", style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.align(Alignment.CenterHorizontally))
         if (!compact || !textExpanded) VoiceControl(state, compact, onClick = { if (state.isRecording) viewModel.stopRecordingAndSave() else startWithPermission() })
         Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            OutlinedButton(onClick = { textExpanded = !textExpanded }, enabled = !state.isBusy && !state.isRecording,
+            OutlinedButton(colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.onSurface), onClick = { textExpanded = !textExpanded }, enabled = !state.isBusy && !state.isRecording,
                 modifier = Modifier.weight(1f)) { Icon(if (compact && textExpanded) Icons.Default.Mic else Icons.Default.Keyboard, null, Modifier.size(18.dp)); Spacer(Modifier.width(6.dp)); Text(if (compact && textExpanded) "Голос" else "Текст") }
-            OutlinedButton(onClick = { filePicker.launch("*/*") }, enabled = !state.isBusy && !state.isRecording,
+            OutlinedButton(colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.onSurface), onClick = { filePicker.launch("*/*") }, enabled = !state.isBusy && !state.isRecording,
                 modifier = Modifier.weight(1f)) { Icon(Icons.Default.AttachFile, null, Modifier.size(18.dp)); Spacer(Modifier.width(6.dp)); Text("Файл") }
         }
         if (textExpanded || state.text.isNotEmpty()) {
             OutlinedTextField(
+                colors = androidx.compose.material3.OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                    focusedLabelColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                    cursorColor = MaterialTheme.colorScheme.onSurface),
                 value = state.text,
                 onValueChange = viewModel::setText,
                 enabled = !state.isBusy,
@@ -198,7 +206,7 @@ fun CaptureScreen(
             Text(
                 "Готово к сохранению",
                 style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.primary,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(top = 12.dp, bottom = 7.dp),
             )
             LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -239,7 +247,7 @@ fun CaptureScreen(
 private fun VoiceControl(state: CaptureUiState, compact: Boolean, onClick: () -> Unit) {
     val amplitude by animateFloatAsState(if (state.isRecording) state.recordingAmplitude else 0f,
         animationSpec = tween(180, easing = FastOutSlowInEasing), label = "Амплитуда")
-    val primary = MaterialTheme.colorScheme.primary
+    val primary = MaterialTheme.colorScheme.onPrimaryContainer
     Column(Modifier.fillMaxWidth().padding(top = 8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
         Box(Modifier.size(if (compact) 132.dp else 156.dp).background(
             Brush.radialGradient(listOf(primary.copy(alpha = 0.10f + amplitude * 0.10f), Color.Transparent))),
@@ -284,7 +292,7 @@ private fun AttachmentCard(draft: AttachmentDraft, onRemove: () -> Unit) {
             Icon(
                 attachmentIcon(draft.mimeType),
                 contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.size(28.dp),
             )
             Column(
@@ -362,7 +370,7 @@ private fun RecentItemCard(entry: InboxItemWithAttachments, driveConnected: Bool
             Icon(
                 recentItemIcon(entry),
                 contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.size(24.dp),
             )
             Column(

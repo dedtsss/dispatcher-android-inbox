@@ -74,7 +74,7 @@ open class MainActivity : ComponentActivity() {
             statusBarStyle = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT),
             navigationBarStyle = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT),
         )
-        requestedRoute = if (intent.getStringExtra("destination") == "settings") "settings" else "capture"
+        requestedRoute = if (savedInstanceState == null) intent.getStringExtra("destination")?.takeIf { it in setOf("capture", "settings") }.orEmpty() else ""
         val container = (application as DispatcherApplication).container
         setContent {
             DispatcherInboxTheme {
@@ -169,7 +169,7 @@ open class MainActivity : ComponentActivity() {
                 startActivity(intent)
                 return
             } catch (_: ActivityNotFoundException) {
-                // Try the next standard Android settings screen.
+                // Пробуем следующий штатный экран Android.
             }
         }
         Toast.makeText(this, "Системные настройки недоступны", Toast.LENGTH_SHORT).show()
@@ -198,7 +198,7 @@ private fun InboxApp(
 ) {
     val navController = rememberNavController()
     LaunchedEffect(requestedRoute, navigationRequest) {
-        if (navController.currentDestination?.route != requestedRoute) {
+        if (requestedRoute.isNotBlank() && navController.currentDestination?.route != requestedRoute) {
             navController.navigate(requestedRoute) { launchSingleTop = true }
         }
     }
@@ -217,10 +217,18 @@ private fun InboxApp(
                     NavigationBarItem(
                         selected = currentRoute == destination.route,
                         onClick = {
-                            navController.navigate(destination.route) {
-                                popUpTo("capture") { saveState = true }
-                                launchSingleTop = true
-                                restoreState = true
+                            if (currentRoute != destination.route) {
+                                if (destination.route == "capture") {
+                                    // Возврат к живому корневому entry, без восстановления стека другой вкладки.
+                                    if (!navController.popBackStack("capture", false)) {
+                                        navController.navigate("capture") { launchSingleTop = true }
+                                    }
+                                } else {
+                                    navController.navigate(destination.route) {
+                                        popUpTo("capture")
+                                        launchSingleTop = true
+                                    }
+                                }
                             }
                         },
                         icon = { Icon(destination.icon, contentDescription = null) },

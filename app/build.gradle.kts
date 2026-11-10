@@ -20,8 +20,8 @@ android {
         applicationId = "ru.bruce.dispatcherinbox"
         minSdk = 26
         targetSdk = 36
-        versionCode = 14
-        versionName = "0.6.8"
+        versionCode = 15
+        versionName = "0.6.9"
         val suppliedUpdateUrl = providers.gradleProperty("updateManifestUrl").orNull.orEmpty().trim()
         val updateUrl = suppliedUpdateUrl.ifBlank { "https://raw.githubusercontent.com/dedtsss/dispatcher-android-inbox/main/updates/update.json" }
         if (updateUrl.isNotEmpty()) {
