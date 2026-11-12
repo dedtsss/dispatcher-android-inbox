@@ -1,0 +1,14 @@
+
+ru.bruce.dispatcherinbox.DriveConnectionTest:..........
+ru.bruce.dispatcherinbox.CaptureIntegrationTest:.
+ru.bruce.dispatcherinbox.AssistantIntegrationTest:....
+ru.bruce.dispatcherinbox.LocalCommitUiTest:...
+ru.bruce.dispatcherinbox.RecordingLevelUiTest:.
+ru.bruce.dispatcherinbox.TabTransitionTest:.
+ru.bruce.dispatcherinbox.UpdateRecoveryTest:....
+
+Time: 119.459
+
+OK (24 tests)
+
+

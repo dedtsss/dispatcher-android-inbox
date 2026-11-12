@@ -1,0 +1,55 @@
+{
+  "tests": 40,
+  "failures": 0,
+  "errors": 0,
+  "suites": [
+    {
+      "name": "ru.bruce.dispatcherinbox.data.InboxItemFactoryTest",
+      "tests": "3",
+      "failures": "0",
+      "errors": "0"
+    },
+    {
+      "name": "ru.bruce.dispatcherinbox.update.UpdateValidationTest",
+      "tests": "11",
+      "failures": "0",
+      "errors": "0"
+    },
+    {
+      "name": "ru.bruce.dispatcherinbox.drive.InvalidTokenCleanupTest",
+      "tests": "4",
+      "failures": "0",
+      "errors": "0"
+    },
+    {
+      "name": "ru.bruce.dispatcherinbox.data.QueueStateMachineTest",
+      "tests": "2",
+      "failures": "0",
+      "errors": "0"
+    },
+    {
+      "name": "ru.bruce.dispatcherinbox.ui.EntryAndDeliveryTest",
+      "tests": "6",
+      "failures": "0",
+      "errors": "0"
+    },
+    {
+      "name": "ru.bruce.dispatcherinbox.sync.SyncItemProcessorTest",
+      "tests": "1",
+      "failures": "0",
+      "errors": "0"
+    },
+    {
+      "name": "ru.bruce.dispatcherinbox.ui.capture.RecordingLevelMeterTest",
+      "tests": "5",
+      "failures": "0",
+      "errors": "0"
+    },
+    {
+      "name": "ru.bruce.dispatcherinbox.drive.DriveGatewayTest",
+      "tests": "8",
+      "failures": "0",
+      "errors": "0"
+    }
+  ]
+}
