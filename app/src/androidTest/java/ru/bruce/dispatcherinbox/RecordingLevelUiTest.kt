@@ -46,7 +46,7 @@ class RecordingLevelUiTest {
                 val bounds = device.findObject(By.desc("Уровень микрофона")).visibleBounds
                 val density = context.resources.displayMetrics.density
                 assertTrue("Индикатор слишком узкий", bounds.width() / density >= 200f)
-                assertEquals(64f, bounds.height() / density, 1f)
+                assertTrue("Неожиданная высота индикатора", listOf(40f, 64f).any { kotlin.math.abs(bounds.height() / density - it) < 1f })
                 var visibleHeight = 0f
                 if (screenshot) {
                     val image = File(dir, "meter-$label.png")
@@ -59,7 +59,7 @@ class RecordingLevelUiTest {
                         Color.red(pixel) > 110 && Color.green(pixel) > 110 && Color.blue(pixel) > 110
                     } / density
                     bitmap.recycle()
-                    val expected = if (state.recordingAmplitude == 0f) 0f else maxOf(1f, state.recordingAmplitude * 64f * 0.92f)
+                    val expected = if (state.recordingAmplitude == 0f) 0f else maxOf(1f, state.recordingAmplitude * (bounds.height() / density) * 0.92f)
                     assertEquals("Высота столбца не следует измерению $label", expected, visibleHeight, 2.5f)
                 }
                 journal.append("$label: raw=$raw; level=${state.recordingAmplitude}; высотаПоследнегоСтолбцаDp=$visibleHeight; boundsPx=$bounds; history=${state.recordingLevels}\n")

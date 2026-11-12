@@ -128,7 +128,7 @@ try:
     time.sleep(2)
     snapshot('capture-assistant-390')
     (OUT / 'capture-geometry.json').write_text(json.dumps(geometry, ensure_ascii=False, indent=2))
-    (OUT / 'capture-source.json').write_text(json.dumps({'head': os.environ['GITHUB_SHA'], 'releaseSha256': hashlib.sha256(APK.read_bytes()).hexdigest(), 'baseline': 'v0.6.10' if BASE.exists() else None, 'signal': 'Эмулятор: системный микрофон; не физическая речь и не калибровка чувствительности.'}, ensure_ascii=False, indent=2))
+    (OUT / 'capture-source.json').write_text(json.dumps({'head': Path('release/source-head.txt').read_text().strip(), 'releaseSha256': hashlib.sha256(APK.read_bytes()).hexdigest(), 'baseline': 'v0.6.10' if BASE.exists() else None, 'signal': 'Эмулятор: системный микрофон; не физическая речь и не калибровка чувствительности.'}, ensure_ascii=False, indent=2))
 finally:
     adb('shell', 'wm', 'size', 'reset', check=False)
     adb('shell', 'wm', 'density', 'reset', check=False)

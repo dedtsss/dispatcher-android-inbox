@@ -156,7 +156,8 @@ fun CaptureScreen(
     val editing = textExpanded || state.text.isNotEmpty() || state.attachments.isNotEmpty()
     BoxWithConstraints(modifier.then(if (compact) Modifier.wrapContentHeight() else Modifier.fillMaxSize()).imePadding()) {
     val availableHeight = maxHeight
-    val shortScreen = !compact && availableHeight < 600.dp
+    val fullDiameter = ((maxWidth - 40.dp) * 0.60f).coerceIn(176.dp, 224.dp)
+    val shortScreen = !compact && availableHeight < fullDiameter + 480.dp
     Column(
         modifier = Modifier
             .then(if (compact) Modifier.wrapContentHeight() else Modifier.fillMaxSize())
@@ -262,7 +263,7 @@ fun CaptureScreen(
             Text(message, modifier = Modifier.padding(vertical = 8.dp),
                 color = if (state.isError) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant)
         }
-        if (textExpanded || state.attachments.isNotEmpty()) {
+        if (editing) {
         Spacer(Modifier.height(10.dp))
         Button(
             onClick = viewModel::save,
