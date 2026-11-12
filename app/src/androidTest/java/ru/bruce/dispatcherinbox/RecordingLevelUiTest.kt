@@ -26,7 +26,7 @@ class RecordingLevelUiTest {
         container.settingsRepository.setDefaultOpenMode("voice")
         val device = UiDevice.getInstance(instrumentation)
         val dir = File(context.getExternalFilesDir(null), "catching-evidence").apply { mkdirs() }
-        val journal = StringBuilder("Источник: управляемые искусственные пики debug LevelMeterTestActivity. Не реальный голос/физическая чувствительность.\nПолноэкранный Canvas: ширина 82% содержимого, высота 64dp; 32 столбца; высота = max(1 dp, level×64×0.92 dp).\n")
+        val journal = StringBuilder("Источник: управляемые искусственные пики debug LevelMeterTestActivity. Не реальный голос/физическая чувствительность.\nПолноэкранный Canvas: ширина 82% содержимого, высота 40dp на малой высоте / 64dp в обычном режиме; 32 столбца; высота = max(1 dp, level×высотаCanvas×0.92 dp).\n")
         val before = container.dao.observeAll().first().map { it.item.id }.toSet()
         ActivityScenario.launch<LevelMeterTestActivity>(Intent(context, LevelMeterTestActivity::class.java)).use { scenario ->
             assertTrue(device.wait(Until.hasObject(By.desc("Начать запись")), 10000))

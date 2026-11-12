@@ -82,9 +82,9 @@ class AssistantIntegrationTest {
             val corner = screenshot.getPixel(logo.left + (4 * density).toInt(), logo.top + (4 * density).toInt())
             assertTrue("Вокруг логотипа появилась светлая плашка", android.graphics.Color.red(corner) < 60 && android.graphics.Color.green(corner) < 60 && android.graphics.Color.blue(corner) < 60)
             screenshot.recycle()
-            assertTrue("Логотип превышает ограничение ширины: $logo", logo.width() <= (if (compact) 48 else 208) * density + 2)
-            // В панели clickable объединяет всю область; у Image главного экрана bounds исключают padding 8dp.
-            val expectedHeight = (if (compact) 48 else 40) * density
+            assertTrue("Логотип превышает ограничение ширины: $logo", logo.width() <= (if (compact) 48 else 160) * density + 2)
+            // В панели clickable объединяет всю область; полноэкранный Image теперь имеет высоту 48dp без padding.
+            val expectedHeight = 48 * density
             assertTrue("Неверная высота области логотипа: $logo", kotlin.math.abs(logo.height() - expectedHeight) <= 2)
             if (compact) {
                 assertTrue("Голова кота не по центру", kotlin.math.abs(logo.centerX() - device.displayWidth / 2) <= 2)
