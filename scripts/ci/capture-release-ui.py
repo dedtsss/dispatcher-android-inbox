@@ -43,9 +43,10 @@ def target(root, label):
     found = [n for n in root.iter('node') if label in (n.get('content-desc'), n.get('text'))]
     assert found, f'Не найдено действие: {label}'
     node = found[-1]
-    while node.get('clickable') != 'true' and node in parents:
+    while node.get('clickable') != 'true' and node.get('selected') != 'true' and node in parents:
         node = parents[node]
-    assert node.get('clickable') == 'true', f'Действие не нажимается: {label}'
+    # Android исключает из accessibility action уже выбранную вкладку.
+    assert node.get('clickable') == 'true' or node.get('selected') == 'true', f'Действие не нажимается: {label}'
     return bounds(node)
 
 

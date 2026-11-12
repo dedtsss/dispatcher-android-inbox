@@ -287,11 +287,11 @@ fun CaptureScreen(
 private fun FullscreenVoiceControl(state: CaptureUiState, shortScreen: Boolean, onClick: () -> Unit) {
     val accent = ru.bruce.dispatcherinbox.ui.theme.CaptureAccent
     BoxWithConstraints(Modifier.fillMaxWidth()) {
-        val diameter = if (shortScreen) 156.dp else (maxWidth * 0.60f).coerceIn(176.dp, 224.dp)
+        val diameter = (maxWidth * 0.60f).coerceIn(176.dp, 224.dp)
         Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
             Box(
-                Modifier.size(diameter + if (shortScreen) 24.dp else 72.dp).background(
-                    Brush.radialGradient(listOf(accent.copy(alpha = 0.22f), accent.copy(alpha = 0.08f), Color.Transparent)),
+                Modifier.size(diameter + if (shortScreen) 40.dp else 72.dp).background(
+                    Brush.radialGradient(0f to accent.copy(alpha = 0.28f), 0.72f to accent.copy(alpha = 0.16f), 1f to Color.Transparent),
                 ), contentAlignment = Alignment.Center,
             ) {
                 Button(
