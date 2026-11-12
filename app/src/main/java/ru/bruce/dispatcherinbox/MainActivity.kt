@@ -18,12 +18,14 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.SystemBarStyle
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.EditNote
+import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.Inbox
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.NavigationBarItemDefaults
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -203,7 +205,7 @@ private fun InboxApp(
         }
     }
     val destinations = listOf(
-        Destination("capture", "Записать", Icons.Default.EditNote),
+        Destination("capture", "Записать", Icons.Default.Mic),
         Destination("queue", "Очередь", Icons.Default.Inbox),
         Destination("settings", "Настройки", Icons.Default.Settings),
     )
@@ -212,10 +214,15 @@ private fun InboxApp(
 
     Scaffold(
         bottomBar = {
-            NavigationBar {
+            NavigationBar(containerColor = MaterialTheme.colorScheme.background, tonalElevation = androidx.compose.ui.unit.Dp(0f)) {
                 destinations.forEach { destination ->
                     NavigationBarItem(
                         selected = currentRoute == destination.route,
+                        colors = NavigationBarItemDefaults.colors(
+                            selectedIconColor = ru.bruce.dispatcherinbox.ui.theme.CaptureAccent,
+                            selectedTextColor = ru.bruce.dispatcherinbox.ui.theme.CaptureAccent,
+                            indicatorColor = MaterialTheme.colorScheme.primaryContainer,
+                        ),
                         onClick = {
                             if (currentRoute != destination.route) {
                                 if (destination.route == "capture") {

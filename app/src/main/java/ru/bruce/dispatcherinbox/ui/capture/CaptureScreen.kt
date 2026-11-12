@@ -18,6 +18,10 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.graphics.Brush
@@ -149,14 +153,18 @@ fun CaptureScreen(
         }
     }
 
+    val editing = textExpanded || state.text.isNotEmpty() || state.attachments.isNotEmpty()
+    BoxWithConstraints(modifier.then(if (compact) Modifier.wrapContentHeight() else Modifier.fillMaxSize()).imePadding()) {
+    val availableHeight = maxHeight
+    val shortScreen = !compact && availableHeight < 600.dp
     Column(
-        modifier = modifier
+        modifier = Modifier
             .then(if (compact) Modifier.wrapContentHeight() else Modifier.fillMaxSize())
-            .imePadding()
             .verticalScroll(rememberScrollState())
+            .then(if (compact) Modifier else Modifier.heightIn(min = availableHeight))
             .padding(horizontal = if (compact) 18.dp else 20.dp, vertical = 14.dp),
     ) {
-        Box(Modifier.fillMaxWidth().height(if (compact) 56.dp else 64.dp), contentAlignment = Alignment.Center) {
+        Box(Modifier.fillMaxWidth().height(if (compact) 56.dp else if (shortScreen) 48.dp else 64.dp), contentAlignment = if (compact) Alignment.Center else Alignment.CenterStart) {
             if (compact) {
                 IconButton(onClick = onClose, modifier = Modifier.align(Alignment.CenterStart).size(48.dp)) {
                     Icon(Icons.Default.Close, "Закрыть ассистент")
@@ -169,17 +177,53 @@ fun CaptureScreen(
             } else {
                 Image(transparentLogo, contentDescription = "Catching",
                     contentScale = androidx.compose.ui.layout.ContentScale.Fit,
-                    modifier = Modifier.widthIn(max = 208.dp).fillMaxWidth().height(56.dp).padding(8.dp))
+                    modifier = Modifier.width(160.dp).height(48.dp))
             }
         }
-        if (!compact) Text("Сначала на телефоне · затем в Google Drive", style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.align(Alignment.CenterHorizontally))
-        if (!compact || !textExpanded) VoiceControl(state, compact, onClick = { if (state.isRecording) viewModel.stopRecordingAndSave() else startWithPermission() })
+        if (!compact && !editing) Spacer(Modifier.weight(1f))
+        if (compact && !textExpanded) VoiceControl(state, true, onClick = { if (state.isRecording) viewModel.stopRecordingAndSave() else startWithPermission() })
+        if (!compact && (!editing || state.isRecording)) FullscreenVoiceControl(
+            state, shortScreen = shortScreen, onClick = { if (state.isRecording) viewModel.stopRecordingAndSave() else startWithPermission() },
+        )
+        if (!compact && !editing) Spacer(Modifier.height(if (shortScreen) 8.dp else 32.dp))
+        if (compact) {
         Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             OutlinedButton(colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.onSurface), onClick = { textExpanded = !textExpanded }, enabled = !state.isBusy && !state.isRecording,
                 modifier = Modifier.weight(1f)) { Icon(if (compact && textExpanded) Icons.Default.Mic else Icons.Default.Keyboard, null, Modifier.size(18.dp)); Spacer(Modifier.width(6.dp)); Text(if (compact && textExpanded) "Голос" else "Текст") }
             OutlinedButton(colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.onSurface), onClick = { filePicker.launch("*/*") }, enabled = !state.isBusy && !state.isRecording,
                 modifier = Modifier.weight(1f)) { Icon(Icons.Default.AttachFile, null, Modifier.size(18.dp)); Spacer(Modifier.width(6.dp)); Text("Файл") }
+        }
+        } else {
+        Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+            OutlinedButton(
+                colors = ButtonDefaults.outlinedButtonColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                    contentColor = MaterialTheme.colorScheme.onSurface,
+                ),
+                shape = RoundedCornerShape(20.dp),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                onClick = { textExpanded = !textExpanded }, enabled = !state.isBusy && !state.isRecording,
+                modifier = Modifier.weight(1f).heightIn(min = 64.dp),
+            ) {
+                Icon(Icons.Default.Description, null, Modifier.size(24.dp))
+                Spacer(Modifier.width(10.dp))
+                Text("Текст", style = MaterialTheme.typography.titleMedium)
+            }
+            OutlinedButton(
+                colors = ButtonDefaults.outlinedButtonColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                    contentColor = MaterialTheme.colorScheme.onSurface,
+                ),
+                shape = RoundedCornerShape(20.dp),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                onClick = { filePicker.launch("*/*") }, enabled = !state.isBusy && !state.isRecording,
+                modifier = Modifier.weight(1f).heightIn(min = 64.dp),
+            ) {
+                Icon(Icons.Default.FolderOpen, null, Modifier.size(24.dp))
+                Spacer(Modifier.width(10.dp))
+                Text("Файл", style = MaterialTheme.typography.titleMedium)
+            }
+        }
         }
         if (textExpanded || state.text.isNotEmpty()) {
             OutlinedTextField(
@@ -232,12 +276,46 @@ fun CaptureScreen(
 
         }
 
-        if (!compact) RecentJournal(
-            items = state.recentItems.take(4),
-            driveConnected = state.driveConnected,
-            modifier = Modifier.padding(top = 16.dp),
-        )
+        if (!compact && !editing) Spacer(Modifier.weight(1f))
         Spacer(Modifier.height(if (compact) 18.dp else 8.dp))
+    }
+    }
+}
+
+@Composable
+private fun FullscreenVoiceControl(state: CaptureUiState, shortScreen: Boolean, onClick: () -> Unit) {
+    val accent = ru.bruce.dispatcherinbox.ui.theme.CaptureAccent
+    BoxWithConstraints(Modifier.fillMaxWidth()) {
+        val diameter = if (shortScreen) 156.dp else (maxWidth * 0.60f).coerceIn(176.dp, 224.dp)
+        Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
+            Box(
+                Modifier.size(diameter + if (shortScreen) 24.dp else 72.dp).background(
+                    Brush.radialGradient(listOf(accent.copy(alpha = 0.22f), accent.copy(alpha = 0.08f), Color.Transparent)),
+                ), contentAlignment = Alignment.Center,
+            ) {
+                Button(
+                    onClick = onClick, enabled = !state.isBusy, shape = CircleShape,
+                    modifier = Modifier.size(diameter), contentPadding = PaddingValues(0.dp),
+                    border = BorderStroke(3.dp, accent),
+                    colors = ButtonDefaults.buttonColors(containerColor = Color.Transparent, contentColor = Color(0xFFF4EAFF)),
+                ) {
+                    Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(
+                        ru.bruce.dispatcherinbox.ui.theme.CaptureButtonTop,
+                        ru.bruce.dispatcherinbox.ui.theme.CaptureButtonBottom,
+                    ))), contentAlignment = Alignment.Center) {
+                        Icon(if (state.isRecording) Icons.Default.Stop else Icons.Default.Mic,
+                            if (state.isRecording) "Остановить и сохранить" else "Начать запись", Modifier.size(76.dp))
+                    }
+                }
+            }
+            RecordingLevelIndicator(state.recordingLevels, state.recordingAmplitude, state.isRecording, accent,
+                Modifier.fillMaxWidth(0.82f).height(if (shortScreen) 40.dp else 64.dp), barWidth = 3.dp)
+            // Место таймера постоянно: старт и остановка не сдвигают основные действия.
+            Box(Modifier.height(28.dp), contentAlignment = Alignment.Center) {
+                if (state.isRecording) Text("%02d:%02d".format(state.recordingSeconds / 60, state.recordingSeconds % 60),
+                    style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface)
+            }
+        }
     }
 }
 
@@ -449,8 +527,12 @@ private val journalTimeFormatter = DateTimeFormatter.ofPattern("dd.MM HH:mm")
 private fun formatTime(timestamp: Long): String = journalTimeFormatter.format(Instant.ofEpochMilli(timestamp))
 
 @Composable
-private fun RecordingLevelIndicator(history: List<Float>, level: Float, recording: Boolean, color: Color) {
-    Canvas(Modifier.width(120.dp).height(24.dp).semantics {
+private fun RecordingLevelIndicator(
+    history: List<Float>, level: Float, recording: Boolean, color: Color,
+    modifier: Modifier = Modifier.width(120.dp).height(24.dp),
+    barWidth: androidx.compose.ui.unit.Dp = 2.dp,
+) {
+    Canvas(modifier.semantics {
         contentDescription = "Уровень микрофона"
         stateDescription = if (recording) "Запись · ${(level * 100).toInt()}%" else "Запись остановлена"
     }) {
@@ -461,8 +543,8 @@ private fun RecordingLevelIndicator(history: List<Float>, level: Float, recordin
             if (value > 0f) {
                 val height = (value.coerceIn(0f, 1f) * size.height * 0.92f).coerceAtLeast(1.dp.toPx())
                 drawRoundRect(color.copy(alpha = 0.85f),
-                    topLeft = androidx.compose.ui.geometry.Offset(index * slot + (slot - 2.dp.toPx()) / 2, (size.height - height) / 2),
-                    size = androidx.compose.ui.geometry.Size(2.dp.toPx(), height),
+                    topLeft = androidx.compose.ui.geometry.Offset(index * slot + (slot - barWidth.toPx()) / 2, (size.height - height) / 2),
+                    size = androidx.compose.ui.geometry.Size(barWidth.toPx(), height),
                     cornerRadius = androidx.compose.ui.geometry.CornerRadius(1.dp.toPx()))
             }
         }

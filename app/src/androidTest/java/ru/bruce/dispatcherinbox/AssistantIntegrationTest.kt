@@ -141,7 +141,7 @@ class AssistantIntegrationTest {
             instrumentation.waitForIdleSync()
             assertEquals(androidx.lifecycle.Lifecycle.State.DESTROYED, scenario.state)
         }
-        for ((control, target) in listOf("Настройки ассистента" to "Версия и обновления", "Catching" to "Сначала на телефоне · затем в Google Drive")) {
+        for ((control, target) in listOf("Настройки ассистента" to "Версия и обновления", "Catching" to "Начать запись")) {
             ActivityScenario.launch<AssistantEntryActivity>(intent).use {
                 assertTrue("Панель ассистента не открылась", device.wait(Until.hasObject(By.desc("Закрыть ассистент")), 10000))
                 if (control == "Catching" && device.hasObject(By.clazz("android.widget.EditText").focused(true))) {
@@ -149,7 +149,7 @@ class AssistantIntegrationTest {
                 }
                 assertTrue("Недоступно управление: $control", device.wait(Until.hasObject(By.desc(control)), 10000))
                 device.findObject(By.desc(control)).click()
-                assertTrue(device.wait(Until.hasObject(By.text(target)), 10000))
+                assertTrue(device.wait(Until.hasObject(if (control == "Catching") By.desc(target) else By.text(target)), 10000))
                 assertFalse(device.hasObject(By.desc("Закрыть ассистент")))
                 assertFalse(device.hasObject(By.desc("Остановить и сохранить")))
             }
@@ -159,7 +159,7 @@ class AssistantIntegrationTest {
         ActivityScenario.launch<AssistantEntryActivity>(intent).use {
             assertTrue(device.wait(Until.hasObject(By.desc("Catching")), 10000))
             device.findObject(By.desc("Catching")).click()
-            assertTrue(device.wait(Until.hasObject(By.text("Сначала на телефоне · затем в Google Drive")), 10000))
+            assertTrue(device.wait(Until.hasObject(By.desc("Начать запись")), 10000))
         }
         device.pressBack()
     }

@@ -36,3 +36,8 @@ fun DispatcherInboxTheme(content: @Composable () -> Unit) {
         content = content,
     )
 }
+
+// Акценты утверждённого полноэкранного экрана записи; компактный ассистент использует прежнюю тему.
+internal val CaptureAccent = Color(0xFFB68AF6)
+internal val CaptureButtonTop = Color(0xFF8754D4)
+internal val CaptureButtonBottom = Color(0xFF35215E)

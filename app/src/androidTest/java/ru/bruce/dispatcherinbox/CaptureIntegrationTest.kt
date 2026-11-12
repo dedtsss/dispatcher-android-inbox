@@ -50,9 +50,12 @@ class CaptureIntegrationTest {
         assertTrue(work.none { it.state == androidx.work.WorkInfo.State.RUNNING })
 
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
-            assertTrue(device.wait(Until.hasObject(By.text("Голос")), 10000))
+            assertTrue(device.wait(Until.hasObject(By.desc("Начать запись")), 10000))
+            device.findObject(By.text("Очередь")).click()
             assertTrue("Capture не получил сохранённое состояние Room", device.wait(
                 Until.hasObject(By.pkg(context.packageName).textContains("Offline оригинал")), 10000))
+            device.findObject(By.text("Записать")).click()
+            assertTrue(device.wait(Until.hasObject(By.desc("Начать запись")), 10000))
             screenshot("01-main")
             device.findObject(By.text("Текст")).click()
             // Поле само получает фокус после появления IME. Общий EditText-селектор

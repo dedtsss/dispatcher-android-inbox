@@ -26,7 +26,7 @@ class RecordingLevelUiTest {
         container.settingsRepository.setDefaultOpenMode("voice")
         val device = UiDevice.getInstance(instrumentation)
         val dir = File(context.getExternalFilesDir(null), "catching-evidence").apply { mkdirs() }
-        val journal = StringBuilder("Источник: управляемые искусственные пики debug LevelMeterTestActivity. Не реальный голос/физическая чувствительность.\nCanvas 120×24 dp; 32 столбца; шаг 3.75 dp; ширина 2 dp; высота = max(1 dp, level×24×0.92 dp).\n")
+        val journal = StringBuilder("Источник: управляемые искусственные пики debug LevelMeterTestActivity. Не реальный голос/физическая чувствительность.\nПолноэкранный Canvas: ширина 82% содержимого, высота 64dp; 32 столбца; высота = max(1 dp, level×64×0.92 dp).\n")
         val before = container.dao.observeAll().first().map { it.item.id }.toSet()
         ActivityScenario.launch<LevelMeterTestActivity>(Intent(context, LevelMeterTestActivity::class.java)).use { scenario ->
             assertTrue(device.wait(Until.hasObject(By.desc("Начать запись")), 10000))
@@ -45,8 +45,8 @@ class RecordingLevelUiTest {
                 assertEquals(32, state.recordingLevels.size)
                 val bounds = device.findObject(By.desc("Уровень микрофона")).visibleBounds
                 val density = context.resources.displayMetrics.density
-                assertEquals(120f, bounds.width() / density, 1f)
-                assertEquals(24f, bounds.height() / density, 1f)
+                assertTrue("Индикатор слишком узкий", bounds.width() / density >= 200f)
+                assertEquals(64f, bounds.height() / density, 1f)
                 var visibleHeight = 0f
                 if (screenshot) {
                     val image = File(dir, "meter-$label.png")
@@ -59,7 +59,7 @@ class RecordingLevelUiTest {
                         Color.red(pixel) > 110 && Color.green(pixel) > 110 && Color.blue(pixel) > 110
                     } / density
                     bitmap.recycle()
-                    val expected = if (state.recordingAmplitude == 0f) 0f else maxOf(1f, state.recordingAmplitude * 24f * 0.92f)
+                    val expected = if (state.recordingAmplitude == 0f) 0f else maxOf(1f, state.recordingAmplitude * 64f * 0.92f)
                     assertEquals("Высота столбца не следует измерению $label", expected, visibleHeight, 2.5f)
                 }
                 journal.append("$label: raw=$raw; level=${state.recordingAmplitude}; высотаПоследнегоСтолбцаDp=$visibleHeight; boundsPx=$bounds; history=${state.recordingLevels}\n")

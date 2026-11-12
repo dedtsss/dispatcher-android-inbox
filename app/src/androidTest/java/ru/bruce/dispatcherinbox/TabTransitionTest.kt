@@ -1,5 +1,7 @@
 package ru.bruce.dispatcherinbox
 
+import androidx.compose.ui.test.hasContentDescription
+import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
@@ -12,10 +14,11 @@ class TabTransitionTest {
     @get:Rule val compose = createAndroidComposeRule<MainActivity>()
 
     @Test fun ordinaryTabsAndBackCompleteWithoutFade() {
-        val capture = "Сначала на телефоне · затем в Google Drive"
+        val capture = "Начать запись"
+        fun selector(label: String) = if (label == capture) hasContentDescription(label) else hasText(label)
         val queue = "Последние локальные записи"
         val settings = "Версия и обновления"
-        compose.onNodeWithText(capture).assertIsDisplayed()
+        compose.onNode(selector(capture)).assertIsDisplayed()
         compose.mainClock.autoAdvance = false
         val journal = StringBuilder("Источник: Compose test clock, не wall-clock производительность телефона.\n")
         fun settled(target: String, outgoing: String) {
@@ -24,9 +27,9 @@ class TabTransitionTest {
                 compose.mainClock.advanceTimeByFrame()
                 compose.waitForIdle()
                 frames++
-            } while (frames < 6 && compose.onAllNodesWithText(outgoing).fetchSemanticsNodes().isNotEmpty())
-            compose.onNodeWithText(target).assertIsDisplayed()
-            compose.onNodeWithText(outgoing).assertDoesNotExist()
+            } while (frames < 6 && compose.onAllNodes(selector(outgoing)).fetchSemanticsNodes().isNotEmpty())
+            compose.onNode(selector(target)).assertIsDisplayed()
+            compose.onNode(selector(outgoing)).assertDoesNotExist()
             journal.append("$outgoing → $target: $frames кадров, не более 96 мс тестового времени\n")
         }
         repeat(3) {
@@ -43,7 +46,7 @@ class TabTransitionTest {
         settled(capture, settings)
         compose.onNodeWithText("Записать").performClick()
         repeat(2) { compose.mainClock.advanceTimeByFrame() }
-        compose.onNodeWithText(capture).assertIsDisplayed()
+        compose.onNode(selector(capture)).assertIsDisplayed()
         journal.append("Повтор Capture: тот же экран; 2 кадра тестовых часов\n")
         val context = compose.activity
         val dir = java.io.File(context.getExternalFilesDir(null), "catching-evidence").apply { mkdirs() }
