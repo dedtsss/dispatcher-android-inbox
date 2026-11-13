@@ -1,0 +1,9 @@
+{
+  "run": 42449144133,
+  "head": "82dd0ec1751dfec6566d99922f1cb9574063d326",
+  "artifact": 13605211198,
+  "archiveSha256": "fdbbe26b1a66467d82b85f2b73dbf258573bd6311c03726936b106036cc8efdf",
+  "androidTests": "8/9",
+  "physicalAcceptance": false,
+  "driveE2E": false
+}

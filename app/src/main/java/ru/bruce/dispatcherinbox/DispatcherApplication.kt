@@ -1,6 +1,7 @@
 package ru.bruce.dispatcherinbox
 
 import android.app.Application
+import kotlinx.coroutines.launch
 import androidx.room.Room
 import ru.bruce.dispatcherinbox.data.AttachmentStore
 import ru.bruce.dispatcherinbox.data.InboxDao
@@ -8,7 +9,7 @@ import ru.bruce.dispatcherinbox.data.InboxDatabase
 import ru.bruce.dispatcherinbox.data.InboxItemFactory
 import ru.bruce.dispatcherinbox.data.InboxRepository
 import ru.bruce.dispatcherinbox.data.SettingsRepository
-import ru.bruce.dispatcherinbox.network.RetrofitDispatcherGateway
+import ru.bruce.dispatcherinbox.drive.*
 import ru.bruce.dispatcherinbox.sync.SyncItemProcessor
 import ru.bruce.dispatcherinbox.sync.SyncScheduler
 
@@ -19,6 +20,9 @@ class DispatcherApplication : Application() {
     override fun onCreate() {
         super.onCreate()
         container = AppContainer(this)
+        kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.IO).launch {
+            runCatching { SyncScheduler(this@DispatcherApplication, container.settingsRepository).scheduleAutomatic() }
+        }
     }
 }
 
@@ -27,7 +31,7 @@ class AppContainer(application: Application) {
         application,
         InboxDatabase::class.java,
         "dispatcher-inbox.db",
-    ).build()
+    ).addMigrations(InboxDatabase.MIGRATION_1_3, InboxDatabase.MIGRATION_2_3).build()
 
     val dao: InboxDao = database.inboxDao()
     val settingsRepository = SettingsRepository(application)
@@ -39,5 +43,14 @@ class AppContainer(application: Application) {
         factory = InboxItemFactory(),
         syncScheduler = syncScheduler,
     )
-    val syncItemProcessor = SyncItemProcessor(RetrofitDispatcherGateway())
+    private val driveAuth = DriveAuthorization(application)
+    val syncItemProcessor = SyncItemProcessor(DriveGateway(
+        ids = object : DriveIdStore {
+            override suspend fun get(key: String) = dao.driveId(key)
+            override suspend fun put(key: String, id: String) = dao.putDriveId(DriveCheckpoint(key, id))
+        },
+        tokenProvider = driveAuth::token,
+        invalidateToken = driveAuth::clear,
+        reportStatus = settingsRepository::setDriveStatus,
+    ))
 }

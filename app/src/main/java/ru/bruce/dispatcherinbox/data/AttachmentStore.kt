@@ -34,6 +34,7 @@ class AttachmentStore(private val context: Context) {
                         output.write(buffer, 0, count)
                         digest.update(buffer, 0, count)
                     }
+                    output.fd.sync()
                 }
             } ?: error("Не удалось открыть выбранный файл")
         } catch (error: Exception) {
@@ -69,11 +70,11 @@ class AttachmentStore(private val context: Context) {
             val targetDir = File(itemsDir, itemId).apply { mkdirs() }
             val fileName = "${draft.id}-${sanitizeFileName(draft.originalName ?: source.name)}"
             val target = File(targetDir, fileName)
-            if (!source.renameTo(target)) {
-                FileInputStream(source).use { input ->
-                    FileOutputStream(target).use(input::copyTo)
+            FileInputStream(source).use { input ->
+                FileOutputStream(target).use { output ->
+                    input.copyTo(output)
+                    output.fd.sync()
                 }
-                source.delete()
             }
             InboxAttachmentEntity(
                 id = draft.id,

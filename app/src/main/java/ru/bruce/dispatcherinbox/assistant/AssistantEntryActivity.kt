@@ -4,11 +4,13 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.SystemBarStyle
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.material3.BottomSheetDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -29,7 +31,10 @@ import ru.bruce.dispatcherinbox.ui.theme.DispatcherInboxTheme
 class AssistantEntryActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        enableEdgeToEdge()
+        enableEdgeToEdge(
+            statusBarStyle = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT),
+            navigationBarStyle = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT),
+        )
         val container = (application as DispatcherApplication).container
         setContent {
             DispatcherInboxTheme {
@@ -43,6 +48,12 @@ class AssistantEntryActivity : ComponentActivity() {
                         ),
                     ),
                     onDismiss = ::finish,
+                    onOpenApp = { destination ->
+                        startActivity(android.content.Intent(this, ru.bruce.dispatcherinbox.MainActivity::class.java)
+                            .putExtra("destination", destination)
+                            .addFlags(android.content.Intent.FLAG_ACTIVITY_CLEAR_TOP or android.content.Intent.FLAG_ACTIVITY_SINGLE_TOP))
+                        finish()
+                    },
                 )
             }
         }
@@ -54,31 +65,27 @@ class AssistantEntryActivity : ComponentActivity() {
 private fun AssistantCaptureSheet(
     viewModel: CaptureViewModel,
     onDismiss: () -> Unit,
+    onOpenApp: (String) -> Unit,
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
-    BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
-        val sheetHeight = (maxHeight * 0.74f).coerceIn(440.dp, 680.dp)
-        ModalBottomSheet(
-            onDismissRequest = onDismiss,
-            sheetState = sheetState,
-            containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.85f),
-            scrimColor = Color.Transparent,
-            dragHandle = { BottomSheetDefaults.DragHandle() },
-        ) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(sheetHeight)
-                    .navigationBarsPadding(),
-            ) {
-                CaptureScreen(
-                    viewModel = viewModel,
-                    forceVoiceStart = true,
-                    onClose = onDismiss,
-                    compact = true,
-                )
-            }
-        }
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+        sheetMaxWidth = 400.dp,
+        modifier = Modifier.padding(horizontal = 18.dp, vertical = 12.dp),
+        containerColor = MaterialTheme.colorScheme.surface,
+        scrimColor = Color.Black.copy(alpha = 0.32f),
+        dragHandle = null,
+        shape = androidx.compose.foundation.shape.RoundedCornerShape(32.dp),
+    ) {
+        CaptureScreen(
+            viewModel = viewModel,
+            forceVoiceStart = false,
+            onClose = onDismiss,
+            compact = true,
+            onOpenApp = { onOpenApp("capture") },
+            onOpenSettings = { onOpenApp("settings") },
+        )
     }
 }

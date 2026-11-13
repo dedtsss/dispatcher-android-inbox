@@ -22,6 +22,7 @@ class InboxRepository(
         text: String?,
         drafts: List<AttachmentDraft>,
         source: String = InboxSource.MANUAL,
+        onLocalCommit: (InboxItemEntity) -> Unit = {},
     ): InboxItemEntity {
         val item = factory.create(text, drafts, source)
         val attachments = mutableListOf<InboxAttachmentEntity>()
@@ -32,7 +33,11 @@ class InboxRepository(
             attachmentStore.deleteAttachments(attachments)
             throw error
         }
-        syncScheduler.scheduleAutomatic()
+        // Локальный commit уже достоверен. UI ассистента может завершиться до очистки/планировщика.
+        onLocalCommit(item)
+        drafts.forEach { runCatching { attachmentStore.deleteDraft(it) } }
+        // Запись уже зафиксирована: сбой планировщика не должен провоцировать повторный capture.
+        runCatching { syncScheduler.scheduleAutomatic() }
         return item
     }
 

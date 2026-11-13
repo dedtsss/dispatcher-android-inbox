@@ -7,18 +7,17 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.channels.Channel
-import kotlinx.coroutines.delay
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import ru.bruce.dispatcherinbox.data.AppSettings
 import ru.bruce.dispatcherinbox.data.AttachmentDraft
 import ru.bruce.dispatcherinbox.data.InboxRepository
 import ru.bruce.dispatcherinbox.data.InboxSource
@@ -32,7 +31,12 @@ data class CaptureUiState(
     val text: String = "",
     val attachments: List<AttachmentDraft> = emptyList(),
     val isRecording: Boolean = false,
+    val recordingSeconds: Long = 0,
+    val driveConnected: Boolean = false,
+    val assistantOpenMode: String? = null,
+    val autoStartAssistantRecording: Boolean = false,
     val recordingAmplitude: Float = 0f,
+    val recordingLevels: List<Float> = RecordingLevelMeter.emptyHistory(),
     val isBusy: Boolean = false,
     val statusMessage: String? = null,
     val isError: Boolean = false,
@@ -45,25 +49,29 @@ class CaptureViewModel(
     private val repository: InboxRepository,
     settingsRepository: SettingsRepository,
     private val source: String,
+    amplitudeSource: (() -> Int)? = null,
 ) : AndroidViewModel(application) {
     private val recorder = VoiceRecorder(application)
+    // Подмена доступна только конструктору теста; штатная Factory всегда читает MediaRecorder.
+    private val readAmplitude = amplitudeSource ?: recorder::currentAmplitude
+    private val levelMeter = RecordingLevelMeter()
     private val audioFeedback = AudioFeedbackManager()
     private val localState = MutableStateFlow(CaptureUiState())
-    private val closeEvents = Channel<Unit>(Channel.BUFFERED)
-    private var closeAfterSave = false
+    private val committedId = MutableStateFlow<String?>(null)
+    private var amplitudeJob: kotlinx.coroutines.Job? = null
     private var lastSavedId: String? = null
-    private var amplitudeJob: Job? = null
 
-    val close = closeEvents.receiveAsFlow()
+    // StateFlow повторит commit новой Activity после конфигурационной смены/возврата в STARTED.
+    val close = committedId.filterNotNull().filter { source == InboxSource.ASSISTANT }.map { Unit }
 
     val state: StateFlow<CaptureUiState> = combine(
         localState,
         settingsRepository.settings,
         repository.items,
     ) { local, settings, items ->
-        closeAfterSave = settings.closeAfterSave
         val saved = lastSavedId?.let { id -> items.firstOrNull { it.item.id == id } }
-        val syncMessage = when (saved?.item?.status) {
+        val waitingForDrive = settings.driveAccount.isBlank() && saved != null && saved.item.status != InboxStatus.SYNCED
+        val syncMessage = if (waitingForDrive) "На телефоне · Ждёт Drive" else when (saved?.item?.status) {
             InboxStatus.SYNCING -> "Отправляется"
             InboxStatus.SYNCED -> "Отправлено"
             InboxStatus.ERROR -> saved.item.lastError ?: "Ошибка отправки"
@@ -72,7 +80,10 @@ class CaptureViewModel(
         }
         local.copy(
             statusMessage = syncMessage,
-            isError = saved?.item?.status == InboxStatus.ERROR || local.isError,
+            isError = (!waitingForDrive && saved?.item?.status == InboxStatus.ERROR) || local.isError,
+            driveConnected = settings.driveAccount.isNotBlank(),
+            assistantOpenMode = settings.assistantOpenMode,
+            autoStartAssistantRecording = settings.autoStartAssistantRecording,
             defaultOpenMode = settings.defaultOpenMode,
             recentItems = items.take(4),
         )
@@ -134,18 +145,34 @@ class CaptureViewModel(
     }
 
     fun startRecording() {
-        if (localState.value.isRecording || localState.value.isBusy) return
+        if (localState.value.isRecording || localState.value.isBusy || committedId.value != null && source == InboxSource.ASSISTANT) return
         lastSavedId = null
         runCatching {
             recorder.start(repository.newVoiceFile())
             audioFeedback.playStartSound()
+            levelMeter.reset()
             localState.value = localState.value.copy(
                 isRecording = true,
                 recordingAmplitude = 0f,
-                statusMessage = "Идет запись…",
+                recordingLevels = RecordingLevelMeter.emptyHistory(),
+                recordingSeconds = 0,
+                statusMessage = "Идёт запись",
                 isError = false,
             )
-            startAmplitudeUpdates()
+
+            val started = android.os.SystemClock.elapsedRealtime()
+            amplitudeJob?.cancel()
+            amplitudeJob = viewModelScope.launch {
+                while (localState.value.isRecording) {
+                    val measured = levelMeter.sample(readAmplitude())
+                    localState.value = localState.value.copy(
+                        recordingAmplitude = measured.level,
+                        recordingLevels = measured.history,
+                        recordingSeconds = (android.os.SystemClock.elapsedRealtime() - started) / 1000,
+                    )
+                    kotlinx.coroutines.delay(RecordingLevelMeter.SAMPLE_INTERVAL_MS)
+                }
+            }
         }.onFailure {
             audioFeedback.playErrorSound()
             showError("Не удалось начать запись")
@@ -154,10 +181,12 @@ class CaptureViewModel(
 
     fun stopRecordingAndSave() {
         if (!localState.value.isRecording) return
-        stopAmplitudeUpdates()
+        amplitudeJob?.cancel()
+        levelMeter.reset()
         localState.value = localState.value.copy(
             isRecording = false,
             recordingAmplitude = 0f,
+            recordingLevels = RecordingLevelMeter.emptyHistory(),
             isBusy = true,
         )
         viewModelScope.launch {
@@ -179,8 +208,11 @@ class CaptureViewModel(
     }
 
     fun save() {
-        if (localState.value.isBusy || localState.value.isRecording) return
-        viewModelScope.launch { saveInternal(localState.value.attachments) }
+        if (localState.value.isBusy || localState.value.isRecording || committedId.value != null && source == InboxSource.ASSISTANT) return
+        val drafts = localState.value.attachments
+        // Синхронно закрываем окно повторного нажатия до запуска coroutine.
+        localState.value = localState.value.copy(isBusy = true)
+        viewModelScope.launch { saveInternal(drafts) }
     }
 
     private suspend fun saveInternal(drafts: List<AttachmentDraft>) {
@@ -189,51 +221,39 @@ class CaptureViewModel(
             showError("Введите текст или добавьте файл")
             return
         }
-        localState.value = localState.value.copy(isBusy = true, statusMessage = "Сохраняем…")
-        runCatching { repository.save(text, drafts, source) }
-            .onSuccess { item ->
-                lastSavedId = item.id
-                localState.value = CaptureUiState(
-                    statusMessage = "В очереди",
-                    defaultOpenMode = localState.value.defaultOpenMode,
-                )
-                if (closeAfterSave) closeEvents.trySend(Unit)
+        localState.value = localState.value.copy(attachments = drafts, isBusy = true, statusMessage = "Сохраняем…")
+        try {
+            // Завершение Activity после commit не должно отменить очистку/постановку WorkManager.
+            withContext(NonCancellable) {
+                repository.save(text, drafts, source, onLocalCommit = { item ->
+                    lastSavedId = item.id
+                    localState.value = CaptureUiState(
+                        statusMessage = "На телефоне · В очереди",
+                        defaultOpenMode = localState.value.defaultOpenMode,
+                    )
+                    committedId.value = item.id
+                })
             }
-            .onFailure { showError(it.message ?: "Не удалось сохранить запись") }
+        } catch (error: Exception) {
+            showError(error.message ?: "Не удалось сохранить запись")
+        }
     }
 
     private fun showError(message: String) {
-        stopAmplitudeUpdates()
+        amplitudeJob?.cancel()
+        levelMeter.reset()
         localState.value = localState.value.copy(
             isBusy = false,
             isRecording = false,
             recordingAmplitude = 0f,
+            recordingLevels = RecordingLevelMeter.emptyHistory(),
             statusMessage = message,
             isError = true,
         )
     }
 
-    private fun startAmplitudeUpdates() {
-        amplitudeJob?.cancel()
-        amplitudeJob = viewModelScope.launch {
-            var smoothed = 0f
-            while (localState.value.isRecording) {
-                val raw = recorder.currentAmplitude().coerceIn(0, 32_767) / 32_767f
-                val visibleLevel = kotlin.math.sqrt(raw)
-                smoothed = smoothed * 0.55f + visibleLevel * 0.45f
-                localState.value = localState.value.copy(recordingAmplitude = smoothed)
-                delay(80)
-            }
-        }
-    }
-
-    private fun stopAmplitudeUpdates() {
-        amplitudeJob?.cancel()
-        amplitudeJob = null
-    }
-
     override fun onCleared() {
-        stopAmplitudeUpdates()
+        amplitudeJob?.cancel()
         if (localState.value.isRecording) recorder.cancel()
         super.onCleared()
     }
