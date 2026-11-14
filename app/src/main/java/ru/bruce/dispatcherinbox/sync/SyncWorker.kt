@@ -4,6 +4,8 @@ import android.content.Context
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import ru.bruce.dispatcherinbox.DispatcherApplication
 import ru.bruce.dispatcherinbox.data.InboxStatus
 import ru.bruce.dispatcherinbox.data.QueueStateMachine
@@ -13,11 +15,12 @@ class SyncWorker(
     appContext: Context,
     params: WorkerParameters,
 ) : CoroutineWorker(appContext, params) {
-    override suspend fun doWork(): Result {
+    override suspend fun doWork(): Result = syncMutex.withLock {
         val container = (applicationContext as DispatcherApplication).container
         val settings = container.settingsRepository.settings.first()
         val manual = inputData.getBoolean(KEY_MANUAL, false)
-        if (!manual && !settings.autoSync) return Result.success()
+        val watchdog = inputData.getBoolean(KEY_WATCHDOG, false)
+        if (!manual && !settings.autoSync) return@withLock Result.success()
 
         container.dao.recoverInterruptedSyncs("Предыдущая синхронизация была прервана")
         val pending = container.dao.getPending()
@@ -56,10 +59,12 @@ class SyncWorker(
             }
         }
 
-        return if (shouldRetry && runAttemptCount < 4) Result.retry() else Result.success()
+        if (SyncRetryPolicy.shouldRetryWorker(shouldRetry, watchdog)) Result.retry() else Result.success()
     }
 
     companion object {
         const val KEY_MANUAL = "manual"
+        const val KEY_WATCHDOG = "watchdog"
+        private val syncMutex = Mutex()
     }
 }

@@ -38,6 +38,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import ru.bruce.dispatcherinbox.data.DefaultOpenMode
 
 @Composable
 fun SettingsScreen(
@@ -89,16 +90,26 @@ fun SettingsScreen(
         Text("Открывать по умолчанию", style = MaterialTheme.typography.titleMedium)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             FilterChip(
-                selected = settings.defaultOpenMode == "text",
-                onClick = { viewModel.setDefaultOpenMode("text") },
+                selected = settings.defaultOpenMode == DefaultOpenMode.TEXT,
+                onClick = { viewModel.setDefaultOpenMode(DefaultOpenMode.TEXT) },
                 label = { Text("Текст") },
             )
             FilterChip(
-                selected = settings.defaultOpenMode == "voice",
-                onClick = { viewModel.setDefaultOpenMode("voice") },
+                selected = settings.defaultOpenMode == DefaultOpenMode.VOICE,
+                onClick = { viewModel.setDefaultOpenMode(DefaultOpenMode.VOICE) },
                 label = { Text("Голос") },
             )
         }
+        SettingSwitch(
+            label = "Автозапись при вызове ассистента",
+            checked = settings.autoStartAssistantRecording,
+            onCheckedChange = viewModel::setAutoStartAssistantRecording,
+        )
+        Text(
+            "Микрофон запускается автоматически только в assistant overlay и только для режима «Голос».",
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            style = MaterialTheme.typography.bodySmall,
+        )
         HorizontalDivider()
         Text("Системный ассистент", style = MaterialTheme.typography.titleMedium)
         AssistantStatus()

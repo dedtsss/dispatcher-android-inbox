@@ -2,6 +2,11 @@ package ru.bruce.dispatcherinbox.data
 
 import java.util.UUID
 
+data class InboxDraftPlan(
+    val item: InboxItemEntity,
+    val attachments: List<AttachmentDraft>,
+)
+
 class InboxItemFactory(
     private val now: () -> Long = System::currentTimeMillis,
     private val newId: () -> String = { UUID.randomUUID().toString() },
@@ -11,6 +16,7 @@ class InboxItemFactory(
         attachments: List<AttachmentDraft>,
         source: String,
         status: String = InboxStatus.QUEUED,
+        durationMillis: Long? = null,
     ): InboxItemEntity {
         val normalizedText = text?.trim()?.takeIf { it.isNotEmpty() }
         require(normalizedText != null || attachments.isNotEmpty()) {
@@ -28,8 +34,20 @@ class InboxItemFactory(
             retryCount = 0,
             lastError = null,
             remoteId = null,
+            durationMillis = durationMillis?.coerceAtLeast(0L),
         )
     }
+
+    fun createPlan(
+        text: String?,
+        attachments: List<AttachmentDraft>,
+        source: String,
+        status: String = InboxStatus.QUEUED,
+        durationMillis: Long? = null,
+    ): InboxDraftPlan = InboxDraftPlan(
+        item = create(text, attachments, source, status, durationMillis),
+        attachments = attachments.toList(),
+    )
 
     fun determineType(text: String?, attachments: List<AttachmentDraft>): String {
         if (!text.isNullOrBlank() && attachments.isEmpty()) return InboxType.TEXT

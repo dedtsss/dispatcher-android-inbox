@@ -23,6 +23,9 @@ class SettingsViewModel(private val repository: SettingsRepository) : ViewModel(
     fun setWifiOnly(value: Boolean) = viewModelScope.launch { repository.setWifiOnly(value) }
     fun setDeleteAfterSync(value: Boolean) = viewModelScope.launch { repository.setDeleteAfterSync(value) }
     fun setDefaultOpenMode(value: String) = viewModelScope.launch { repository.setDefaultOpenMode(value) }
+    fun setAutoStartAssistantRecording(value: Boolean) = viewModelScope.launch {
+        repository.setAutoStartAssistantRecording(value)
+    }
     fun setCloseAfterSave(value: Boolean) = viewModelScope.launch { repository.setCloseAfterSave(value) }
 
     class Factory(private val repository: SettingsRepository) : ViewModelProvider.Factory {

@@ -5,16 +5,26 @@ import android.content.pm.PackageManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -26,26 +36,40 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AttachFile
 import androidx.compose.material.icons.filled.Audiotrack
+import androidx.compose.material.icons.filled.Cancel
+import androidx.compose.material.icons.filled.CameraAlt
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Description
+import androidx.compose.material.icons.filled.HourglassTop
 import androidx.compose.material.icons.filled.Image
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.Movie
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Stop
+import androidx.compose.material.icons.outlined.Tune
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -56,30 +80,75 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import ru.bruce.dispatcherinbox.BuildConfig
 import ru.bruce.dispatcherinbox.data.AttachmentDraft
+import ru.bruce.dispatcherinbox.data.DefaultOpenMode
 import ru.bruce.dispatcherinbox.data.InboxItemWithAttachments
 import ru.bruce.dispatcherinbox.data.InboxStatus
+import ru.bruce.dispatcherinbox.data.JournalKind
+import ru.bruce.dispatcherinbox.data.toJournalPresentation
+import ru.bruce.dispatcherinbox.ui.theme.DispatcherBackground
+import ru.bruce.dispatcherinbox.ui.theme.DispatcherError
+import ru.bruce.dispatcherinbox.ui.theme.DispatcherSuccess
+import ru.bruce.dispatcherinbox.ui.theme.DispatcherWarning
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
+import kotlin.math.PI
+import kotlin.math.abs
+import kotlin.math.sin
+
+private const val NOTE_MAX_LENGTH = 2_000
 
 @Composable
 fun CaptureScreen(
     viewModel: CaptureViewModel,
-    forceVoiceStart: Boolean,
     onClose: () -> Unit,
     modifier: Modifier = Modifier,
     compact: Boolean = false,
+    isAssistantMode: Boolean = false,
+    panelAlpha: Float = 1f,
+    onOpenSettings: () -> Unit = {},
+    onOpenQueue: () -> Unit = {},
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
     var requestedAutoStart by rememberSaveable { mutableStateOf(false) }
+    var showAbout by rememberSaveable { mutableStateOf(false) }
+    val noteFocusRequester = remember { FocusRequester() }
+
+    DisposableEffect(lifecycleOwner, viewModel) {
+        val observer = LifecycleEventObserver { _, event ->
+            when (event) {
+                Lifecycle.Event.ON_RESUME -> viewModel.onHostActiveChanged(true)
+                Lifecycle.Event.ON_PAUSE -> viewModel.onHostActiveChanged(false)
+                else -> Unit
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        viewModel.onHostActiveChanged(lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED))
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+            viewModel.onHostActiveChanged(false)
+        }
+    }
 
     val audioPermission = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission(),
@@ -105,179 +174,414 @@ fun CaptureScreen(
         }
     }
 
-    LaunchedEffect(state.defaultOpenMode, forceVoiceStart) {
-        if (!requestedAutoStart && state.defaultOpenMode != null &&
-            (forceVoiceStart || state.defaultOpenMode == "voice")
-        ) {
+    LaunchedEffect(
+        state.defaultOpenMode,
+        state.autoStartAssistantRecording,
+        isAssistantMode,
+    ) {
+        if (!requestedAutoStart && state.defaultOpenMode != null) {
             requestedAutoStart = true
-            startWithPermission()
+            if (
+                CaptureLaunchPolicy.shouldAutoStartRecording(
+                    isAssistantMode = isAssistantMode,
+                    defaultOpenMode = state.defaultOpenMode,
+                    autoStartAssistantRecording = state.autoStartAssistantRecording,
+                )
+            ) {
+                startWithPermission()
+            }
         }
+    }
+    LaunchedEffect(state.defaultOpenMode) {
+        if (state.defaultOpenMode == DefaultOpenMode.TEXT) noteFocusRequester.requestFocus()
     }
     LaunchedEffect(viewModel) { viewModel.close.collect { onClose() } }
 
-    Column(
+    BoxWithConstraints(
         modifier = modifier
             .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(horizontal = if (compact) 18.dp else 20.dp, vertical = 14.dp),
+            .background(if (isAssistantMode) Color.Transparent else DispatcherBackground)
+            .imePadding(),
     ) {
-        Text(
-            if (compact) "Диспетчер Bruce" else "Быстрая запись",
-            style = MaterialTheme.typography.headlineSmall,
-        )
-        Text(
-            if (compact) "Продиктуйте или добавьте файл"
-            else "Текст, голос или файл — остальное сделает Диспетчер",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        Spacer(Modifier.height(if (compact) 10.dp else 16.dp))
-
-        OutlinedTextField(
-            value = state.text,
-            onValueChange = viewModel::setText,
-            enabled = !state.isBusy,
-            label = { Text("Что записать?") },
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(if (compact) 112.dp else 180.dp),
-            shape = RoundedCornerShape(20.dp),
-        )
-
-        if (state.attachments.isNotEmpty()) {
-            Text(
-                "Готово к сохранению",
-                style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.padding(top = 12.dp, bottom = 7.dp),
-            )
-            LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                items(state.attachments, key = { it.id }) { draft ->
-                    AttachmentCard(draft = draft, onRemove = { viewModel.removeAttachment(draft) })
-                }
-            }
+        val shortScreen = maxHeight < 700.dp
+        val journalLimit = if (compact || shortScreen) 3 else 5
+        val noteHeight = when {
+            compact -> 148.dp
+            shortScreen -> 156.dp
+            else -> 188.dp
         }
 
-        Spacer(Modifier.height(10.dp))
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(4.dp),
+        Surface(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(
+                    horizontal = if (compact) 8.dp else 12.dp,
+                    vertical = if (compact) 0.dp else 10.dp,
+                ),
+            shape = RoundedCornerShape(if (compact) 28.dp else 32.dp),
+            color = MaterialTheme.colorScheme.surface.copy(alpha = panelAlpha),
+            contentColor = MaterialTheme.colorScheme.onSurface,
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.72f)),
+            tonalElevation = 2.dp,
         ) {
-            IconButton(
-                enabled = !state.isBusy && !state.isRecording,
-                onClick = { filePicker.launch("*/*") },
-            ) { Icon(Icons.Default.AttachFile, contentDescription = "Выбрать файлы") }
-            IconButton(
-                enabled = !state.isBusy && !state.isRecording,
-                onClick = {
-                    photoPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
-                },
-            ) { Icon(Icons.Default.Image, contentDescription = "Выбрать фотографии") }
-            IconButton(
-                enabled = !state.isBusy,
-                onClick = {
-                    if (state.isRecording) viewModel.stopRecordingAndSave() else startWithPermission()
-                },
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .verticalScroll(rememberScrollState())
+                    .padding(horizontal = if (compact) 16.dp else 20.dp, vertical = 14.dp),
+                verticalArrangement = Arrangement.spacedBy(if (compact) 10.dp else 12.dp),
             ) {
-                Icon(
-                    if (state.isRecording) Icons.Default.Stop else Icons.Default.Mic,
-                    contentDescription = if (state.isRecording) "Остановить запись" else "Записать голос",
-                    tint = if (state.isRecording) MaterialTheme.colorScheme.error
-                    else MaterialTheme.colorScheme.primary,
+                CaptureHeader(onOpenSettings = onOpenSettings)
+
+                NoteField(
+                    value = state.text,
+                    onValueChange = viewModel::setText,
+                    enabled = !state.isBusy,
+                    height = noteHeight,
+                    focusRequester = noteFocusRequester,
                 )
-            }
-            if (state.isRecording) {
-                RecordingLevelIndicator(
-                    amplitude = state.recordingAmplitude,
-                    modifier = Modifier.weight(1f),
+
+                if (state.attachments.isNotEmpty()) {
+                    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        items(state.attachments, key = { it.id }) { draft ->
+                            AttachmentCard(
+                                draft = draft,
+                                onRemove = { viewModel.removeAttachment(draft) },
+                            )
+                        }
+                    }
+                }
+
+                ActionButtons(
+                    isRecording = state.isRecording,
+                    voiceModeSelected = state.defaultOpenMode == DefaultOpenMode.VOICE,
+                    isBusy = state.isBusy,
+                    onVoiceClick = {
+                        if (state.isRecording) viewModel.cancelRecording() else startWithPermission()
+                    },
+                    onFileClick = { filePicker.launch("*/*") },
+                    onPhotoClick = {
+                        photoPicker.launch(
+                            PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly),
+                        )
+                    },
                 )
-            } else state.statusMessage?.let { message ->
-                Surface(
-                    color = if (state.isError) MaterialTheme.colorScheme.errorContainer
-                    else MaterialTheme.colorScheme.secondaryContainer,
-                    shape = RoundedCornerShape(12.dp),
-                    modifier = Modifier.weight(1f),
-                ) {
-                    Text(
-                        message,
-                        modifier = Modifier.padding(horizontal = 11.dp, vertical = 8.dp),
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis,
-                        style = MaterialTheme.typography.bodySmall,
+
+                state.statusMessage?.let { message ->
+                    StatusMessage(
+                        message = message,
+                        isError = state.isError,
+                        isRecording = state.isRecording,
                     )
                 }
+
+                DynamicSendButton(
+                    isRecording = state.isRecording,
+                    isSending = state.isBusy,
+                    audioLevel = state.recordingAmplitude,
+                    enabled = !state.isBusy && (state.isRecording ||
+                        state.text.isNotBlank() || state.attachments.isNotEmpty()),
+                    onClick = {
+                        if (state.isRecording) viewModel.stopRecordingAndSave() else viewModel.save()
+                    },
+                )
+
+                RecentJournal(
+                    items = state.recentItems.take(journalLimit),
+                    onOpenQueue = onOpenQueue,
+                )
+
+                CaptureFooter(
+                    onOpenSettings = onOpenSettings,
+                    onOpenAbout = { showAbout = true },
+                )
             }
         }
-        Spacer(Modifier.height(10.dp))
-        Button(
-            onClick = viewModel::save,
-            enabled = !state.isBusy && !state.isRecording &&
-                (state.text.isNotBlank() || state.attachments.isNotEmpty()),
-            modifier = Modifier.fillMaxWidth(),
-            contentPadding = ButtonDefaults.ContentPadding,
-        ) {
-            Text(if (state.isBusy) "Сохраняем…" else "Сохранить")
-        }
+    }
 
-        RecentJournal(
-            items = state.recentItems.take(if (compact) 2 else 4),
-            modifier = Modifier.padding(top = 16.dp),
+    if (showAbout) {
+        AlertDialog(
+            onDismissRequest = { showAbout = false },
+            icon = { Icon(Icons.Default.Info, contentDescription = null) },
+            title = { Text("О приложении") },
+            text = {
+                Text(
+                    "Диспетчер Брюс ${BuildConfig.VERSION_NAME}\n\n" +
+                        "Быстрый приём текста, голоса и файлов с надёжной локальной очередью.",
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = { showAbout = false }) { Text("Готово") }
+            },
         )
-        Spacer(Modifier.height(if (compact) 18.dp else 8.dp))
     }
 }
 
 @Composable
-private fun RecordingLevelIndicator(
-    amplitude: Float,
+private fun CaptureHeader(onOpenSettings: () -> Unit) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = buildAnnotatedString {
+                append("Диспетчер ")
+                withStyle(SpanStyle(color = MaterialTheme.colorScheme.primary)) { append("Брюс") }
+            },
+            modifier = Modifier.weight(1f),
+            style = MaterialTheme.typography.headlineSmall,
+            fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.onSurface,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+        IconButton(onClick = onOpenSettings) {
+            Icon(
+                Icons.Default.Settings,
+                contentDescription = "Настройки",
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}
+
+@Composable
+private fun NoteField(
+    value: String,
+    onValueChange: (String) -> Unit,
+    enabled: Boolean,
+    height: androidx.compose.ui.unit.Dp,
+    focusRequester: FocusRequester,
+) {
+    OutlinedTextField(
+        value = value,
+        onValueChange = { updated ->
+            if (updated.length <= NOTE_MAX_LENGTH) onValueChange(updated)
+        },
+        enabled = enabled,
+        placeholder = { Text("Введите заметку...") },
+        supportingText = {
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                Text("${value.length}/$NOTE_MAX_LENGTH")
+            }
+        },
+        modifier = Modifier
+            .fillMaxWidth()
+            .focusRequester(focusRequester)
+            .height(height),
+        shape = RoundedCornerShape(22.dp),
+        colors = OutlinedTextFieldDefaults.colors(
+            focusedBorderColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.82f),
+            unfocusedBorderColor = MaterialTheme.colorScheme.outline,
+            focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.36f),
+            unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.24f),
+            cursorColor = MaterialTheme.colorScheme.primary,
+            focusedTextColor = MaterialTheme.colorScheme.onSurface,
+            unfocusedTextColor = MaterialTheme.colorScheme.onSurface,
+            focusedPlaceholderColor = MaterialTheme.colorScheme.onSurfaceVariant,
+            unfocusedPlaceholderColor = MaterialTheme.colorScheme.onSurfaceVariant,
+            focusedSupportingTextColor = MaterialTheme.colorScheme.onSurfaceVariant,
+            unfocusedSupportingTextColor = MaterialTheme.colorScheme.onSurfaceVariant,
+        ),
+    )
+}
+
+@Composable
+private fun ActionButtons(
+    isRecording: Boolean,
+    voiceModeSelected: Boolean,
+    isBusy: Boolean,
+    onVoiceClick: () -> Unit,
+    onFileClick: () -> Unit,
+    onPhotoClick: () -> Unit,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        CaptureActionButton(
+            text = if (isRecording) "Отмена" else "Голос",
+            icon = if (isRecording) Icons.Default.Cancel else Icons.Default.Mic,
+            enabled = !isBusy,
+            active = isRecording || voiceModeSelected,
+            onClick = onVoiceClick,
+            modifier = Modifier.weight(1f),
+        )
+        CaptureActionButton(
+            text = "Файл",
+            icon = Icons.Default.AttachFile,
+            enabled = !isBusy && !isRecording,
+            onClick = onFileClick,
+            modifier = Modifier.weight(1f),
+        )
+        CaptureActionButton(
+            text = "Фото",
+            icon = Icons.Default.CameraAlt,
+            enabled = !isBusy && !isRecording,
+            onClick = onPhotoClick,
+            modifier = Modifier.weight(1f),
+        )
+    }
+}
+
+@Composable
+private fun CaptureActionButton(
+    text: String,
+    icon: ImageVector,
+    enabled: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    active: Boolean = false,
+) {
+    OutlinedButton(
+        onClick = onClick,
+        enabled = enabled,
+        modifier = modifier.heightIn(min = 50.dp),
+        shape = RoundedCornerShape(18.dp),
+        border = BorderStroke(
+            1.dp,
+            if (active) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant,
+        ),
+        colors = ButtonDefaults.outlinedButtonColors(
+            containerColor = if (active) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.55f)
+            else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
+            contentColor = if (active) MaterialTheme.colorScheme.primary
+            else MaterialTheme.colorScheme.onSurface,
+        ),
+        contentPadding = ButtonDefaults.ButtonWithIconContentPadding,
+    ) {
+        Icon(icon, contentDescription = null, modifier = Modifier.size(20.dp))
+        Spacer(Modifier.width(7.dp))
+        Text(text, maxLines = 1, overflow = TextOverflow.Ellipsis)
+    }
+}
+
+@Composable
+private fun StatusMessage(message: String, isError: Boolean, isRecording: Boolean) {
+    val color = when {
+        isError -> MaterialTheme.colorScheme.error
+        isRecording -> MaterialTheme.colorScheme.primary
+        else -> MaterialTheme.colorScheme.onSurfaceVariant
+    }
+    Text(
+        text = message,
+        style = MaterialTheme.typography.bodySmall,
+        color = color,
+        maxLines = 2,
+        overflow = TextOverflow.Ellipsis,
+        modifier = Modifier.padding(horizontal = 4.dp),
+    )
+}
+
+@Composable
+fun DynamicSendButton(
+    isRecording: Boolean,
+    isSending: Boolean,
+    audioLevel: Float,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+) {
+    Button(
+        onClick = onClick,
+        enabled = enabled,
+        modifier = modifier
+            .fillMaxWidth()
+            .height(62.dp),
+        shape = RoundedCornerShape(22.dp),
+        colors = ButtonDefaults.buttonColors(
+            containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.78f),
+            contentColor = MaterialTheme.colorScheme.primary,
+            disabledContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.72f),
+            disabledContentColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.75f),
+        ),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.42f)),
+        contentPadding = ButtonDefaults.ButtonWithIconContentPadding,
+    ) {
+        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            if (isRecording) {
+                AudioWaveform(
+                    isRecording = true,
+                    audioLevel = audioLevel,
+                    modifier = Modifier.fillMaxSize(),
+                )
+            }
+            Surface(
+                color = MaterialTheme.colorScheme.surface.copy(alpha = 0.82f),
+                shape = RoundedCornerShape(20.dp),
+            ) {
+                Text(
+                    text = when {
+                        isSending -> "Сохраняем…"
+                        isRecording -> "Отправить"
+                        else -> "Отправить"
+                    },
+                    modifier = Modifier.padding(horizontal = 18.dp, vertical = 7.dp),
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun AudioWaveform(
+    isRecording: Boolean,
+    audioLevel: Float,
     modifier: Modifier = Modifier,
 ) {
-    val animatedAmplitude by animateFloatAsState(
-        targetValue = amplitude.coerceIn(0f, 1f),
-        animationSpec = tween(durationMillis = 80),
-        label = "recordingAmplitude",
-    )
-    val indicatorColor = MaterialTheme.colorScheme.onErrorContainer
+    if (!isRecording) return
 
-    Surface(
-        color = MaterialTheme.colorScheme.errorContainer,
-        shape = RoundedCornerShape(12.dp),
-        modifier = modifier,
+    val level by animateFloatAsState(
+        targetValue = if (isRecording) audioLevel.coerceIn(0f, 1f) else 0f,
+        animationSpec = tween(220),
+        label = "waveformLevel",
+    )
+    val phase = if (isRecording) {
+        val transition = rememberInfiniteTransition(label = "waveformMotion")
+        val animatedPhase by transition.animateFloat(
+            initialValue = 0f,
+            targetValue = (2f * PI).toFloat(),
+            animationSpec = infiniteRepeatable(tween(1_400, easing = LinearEasing)),
+            label = "waveformPhase",
+        )
+        animatedPhase
+    } else {
+        0f
+    }
+    val waveColor = MaterialTheme.colorScheme.primary
+
+    Canvas(
+        modifier = modifier.semantics {
+            contentDescription = "Индикатор уровня записи"
+        },
     ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 11.dp, vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(9.dp),
-        ) {
-            Canvas(
-                modifier = Modifier
-                    .width(54.dp)
-                    .height(22.dp),
-            ) {
-                val factors = floatArrayOf(0.48f, 0.72f, 0.9f, 1f, 0.84f, 0.66f, 0.44f)
-                val barWidth = size.width / 15f
-                val gap = barWidth
-                factors.forEachIndexed { index, factor ->
-                    val heightFraction = (0.16f + animatedAmplitude * factor * 0.84f)
-                        .coerceIn(0.16f, 1f)
-                    val barHeight = size.height * heightFraction
-                    drawRoundRect(
-                        color = indicatorColor,
-                        topLeft = Offset(
-                            x = index * (barWidth + gap),
-                            y = (size.height - barHeight) / 2f,
-                        ),
-                        size = Size(barWidth, barHeight),
-                        cornerRadius = CornerRadius(barWidth / 2f, barWidth / 2f),
-                    )
-                }
-            }
-            Text(
-                "Запись идет",
-                style = MaterialTheme.typography.bodySmall,
-                color = indicatorColor,
-                maxLines = 1,
+        val count = 44
+        val gap = size.width / (count * 2.05f)
+        val barWidth = gap * 0.62f
+        val activeLevel = (0.14f + level * 0.86f).coerceIn(0.14f, 1f)
+        repeat(count) { index ->
+            val centerX = (index + 0.5f) * size.width / count
+            val normalizedX = centerX / size.width
+            val distanceFromCenter = abs(normalizedX - 0.5f)
+            if (distanceFromCenter < 0.18f) return@repeat
+
+            val edgeFade = (distanceFromCenter / 0.5f).coerceIn(0f, 1f)
+            val centerFade = ((distanceFromCenter - 0.18f) / 0.14f).coerceIn(0f, 1f)
+            val motion = if (isRecording) phase else 0f
+            val pattern = (0.38f + 0.62f * abs(sin(index * 0.62f + motion)))
+            val envelope = (1f - abs(normalizedX - 0.5f) * 0.72f).coerceAtLeast(0.38f)
+            val barHeight = (size.height * (0.10f + activeLevel * pattern * envelope))
+                .coerceIn(size.height * 0.10f, size.height * 0.84f)
+            drawRoundRect(
+                color = waveColor.copy(
+                    alpha = (0.18f + activeLevel * 0.72f) * edgeFade * centerFade,
+                ),
+                topLeft = Offset(centerX - barWidth / 2f, (size.height - barHeight) / 2f),
+                size = Size(barWidth, barHeight),
+                cornerRadius = CornerRadius(barWidth, barWidth),
             )
         }
     }
@@ -286,25 +590,24 @@ private fun RecordingLevelIndicator(
 @Composable
 private fun AttachmentCard(draft: AttachmentDraft, onRemove: () -> Unit) {
     Card(
-        modifier = Modifier.width(292.dp),
+        modifier = Modifier.width(276.dp),
         shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.70f),
+        ),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
     ) {
         Row(
-            modifier = Modifier.padding(start = 13.dp, top = 10.dp, bottom = 10.dp),
+            modifier = Modifier.padding(start = 13.dp, top = 9.dp, bottom = 9.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Icon(
                 attachmentIcon(draft.mimeType),
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(28.dp),
+                modifier = Modifier.size(24.dp),
             )
-            Column(
-                modifier = Modifier
-                    .weight(1f)
-                    .padding(horizontal = 10.dp),
-            ) {
+            Column(modifier = Modifier.weight(1f).padding(horizontal = 10.dp)) {
                 Text(
                     draft.originalName ?: "Вложение",
                     maxLines = 1,
@@ -330,105 +633,138 @@ private fun AttachmentCard(draft: AttachmentDraft, onRemove: () -> Unit) {
 @Composable
 private fun RecentJournal(
     items: List<InboxItemWithAttachments>,
-    modifier: Modifier = Modifier,
+    onOpenQueue: () -> Unit,
 ) {
-    Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(7.dp)) {
+    Column(modifier = Modifier.fillMaxWidth()) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text("Недавние записи", style = MaterialTheme.typography.titleSmall)
-            if (items.isNotEmpty()) {
-                Text(
-                    "${items.size} посл.",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
+            Text(
+                "Журнал",
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            TextButton(onClick = onOpenQueue) { Text("Все") }
         }
+        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
         if (items.isEmpty()) {
             Text(
-                "После сохранения здесь появится краткий журнал",
+                "Последние записи появятся здесь",
+                modifier = Modifier.padding(vertical = 14.dp),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         } else {
-            items.forEach { entry -> RecentItemCard(entry) }
+            items.forEachIndexed { index, entry ->
+                RecentJournalRow(entry)
+                if (index < items.lastIndex) {
+                    HorizontalDivider(
+                        modifier = Modifier.padding(start = 34.dp),
+                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.8f),
+                    )
+                }
+            }
         }
     }
 }
 
 @Composable
-private fun RecentItemCard(entry: InboxItemWithAttachments) {
+private fun RecentJournalRow(entry: InboxItemWithAttachments) {
     val item = entry.item
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(14.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+    val status = journalStatus(item.status)
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 9.dp, horizontal = 2.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 9.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
+        JournalTypeIcons(entry.toJournalPresentation().kinds)
+        Spacer(Modifier.width(5.dp))
+        Icon(
+            imageVector = status.icon,
+            contentDescription = status.description,
+            tint = status.color,
+            modifier = Modifier.size(14.dp),
+        )
+        Text(
+            text = recentSummary(entry),
+            modifier = Modifier.weight(1f).padding(horizontal = 11.dp),
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
+        Text(
+            text = formatTime(item.createdAt),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+private data class JournalStatus(
+    val icon: ImageVector,
+    val color: Color,
+    val description: String,
+)
+
+private fun journalStatus(status: String): JournalStatus = when (status) {
+    InboxStatus.SYNCED -> JournalStatus(Icons.Default.CheckCircle, DispatcherSuccess, "Отправлено")
+    InboxStatus.ERROR -> JournalStatus(Icons.Default.Cancel, DispatcherError, "Ошибка")
+    InboxStatus.SYNCING -> JournalStatus(Icons.Default.HourglassTop, DispatcherWarning, "Отправляется")
+    InboxStatus.DRAFT -> JournalStatus(Icons.Default.HourglassTop, Color.Gray, "Черновик")
+    else -> JournalStatus(Icons.Default.HourglassTop, DispatcherWarning, "В очереди")
+}
+
+@Composable
+private fun JournalTypeIcons(kinds: List<JournalKind>) {
+    Row(horizontalArrangement = Arrangement.spacedBy((-3).dp)) {
+        kinds.take(3).forEach { kind ->
             Icon(
-                recentItemIcon(entry),
+                imageVector = when (kind) {
+                    JournalKind.TEXT -> Icons.Default.Description
+                    JournalKind.PHOTO -> Icons.Default.Image
+                    JournalKind.FILE -> Icons.Default.AttachFile
+                    JournalKind.VOICE -> Icons.Default.Mic
+                    JournalKind.VIDEO -> Icons.Default.Movie
+                },
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(24.dp),
+                modifier = Modifier.size(19.dp),
             )
-            Column(
-                modifier = Modifier
-                    .weight(1f)
-                    .padding(horizontal = 10.dp),
-            ) {
-                Text(
-                    recentSummary(entry),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    style = MaterialTheme.typography.bodyMedium,
-                )
-                Text(
-                    "${recentTypeLabel(entry)} · ${formatTime(item.createdAt)}",
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            StatusBadge(item.status)
         }
     }
 }
 
 @Composable
-private fun StatusBadge(status: String) {
-    val color: Color
-    val label: String
-    when (status) {
-        InboxStatus.SYNCED -> {
-            color = MaterialTheme.colorScheme.primaryContainer
-            label = "Отправлено"
+private fun CaptureFooter(
+    onOpenSettings: () -> Unit,
+    onOpenAbout: () -> Unit,
+) {
+    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceEvenly,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        TextButton(onClick = onOpenSettings, modifier = Modifier.weight(1f)) {
+            Icon(Icons.Outlined.Tune, contentDescription = null, modifier = Modifier.size(19.dp))
+            Spacer(Modifier.width(7.dp))
+            Text("Настройки", maxLines = 1)
         }
-        InboxStatus.ERROR -> {
-            color = MaterialTheme.colorScheme.errorContainer
-            label = "Ошибка"
-        }
-        InboxStatus.SYNCING -> {
-            color = MaterialTheme.colorScheme.tertiaryContainer
-            label = "Отправка"
-        }
-        else -> {
-            color = MaterialTheme.colorScheme.secondaryContainer
-            label = "В очереди"
-        }
-    }
-    Surface(color = color, shape = RoundedCornerShape(9.dp)) {
-        Text(
-            label,
-            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-            style = MaterialTheme.typography.labelSmall,
+        Box(
+            modifier = Modifier
+                .width(1.dp)
+                .height(24.dp)
+                .background(MaterialTheme.colorScheme.outlineVariant),
         )
+        TextButton(onClick = onOpenAbout, modifier = Modifier.weight(1f)) {
+            Icon(Icons.Default.Info, contentDescription = null, modifier = Modifier.size(19.dp))
+            Spacer(Modifier.width(7.dp))
+            Text("О приложении", maxLines = 1)
+        }
     }
 }
 
@@ -439,10 +775,6 @@ private fun attachmentIcon(mimeType: String?): ImageVector = when {
     mimeType == "application/pdf" || mimeType?.startsWith("text/") == true -> Icons.Default.Description
     else -> Icons.Default.AttachFile
 }
-
-private fun recentItemIcon(entry: InboxItemWithAttachments): ImageVector =
-    if (entry.attachments.isEmpty()) Icons.Default.Description
-    else attachmentIcon(entry.attachments.first().mimeType)
 
 private fun attachmentTypeLabel(mimeType: String?): String {
     val category = when {
@@ -458,16 +790,14 @@ private fun attachmentTypeLabel(mimeType: String?): String {
 }
 
 private fun recentSummary(entry: InboxItemWithAttachments): String {
-    entry.item.text?.takeIf { it.isNotBlank() }?.let { return it }
-    val first = entry.attachments.firstOrNull()?.originalName ?: "Запись без названия"
-    val remaining = entry.attachments.size - 1
-    return if (remaining > 0) "$first и еще $remaining" else first
-}
-
-private fun recentTypeLabel(entry: InboxItemWithAttachments): String {
-    if (!entry.item.text.isNullOrBlank() && entry.attachments.isNotEmpty()) return "Текст и файлы"
-    if (entry.attachments.isNotEmpty()) return attachmentTypeLabel(entry.attachments.first().mimeType)
-    return "Текст"
+    val presentation = entry.toJournalPresentation()
+    val status = journalStatus(entry.item.status).description.lowercase()
+    return buildList {
+        add(presentation.typeSummary)
+        presentation.duration?.let(::add)
+        add(status)
+        presentation.detail?.let(::add)
+    }.joinToString(" · ")
 }
 
 private fun formatSize(bytes: Long): String = when {
@@ -476,7 +806,7 @@ private fun formatSize(bytes: Long): String = when {
     else -> "$bytes Б"
 }
 
-private val journalTimeFormatter = DateTimeFormatter.ofPattern("dd.MM HH:mm")
+private val journalTimeFormatter = DateTimeFormatter.ofPattern("HH:mm")
     .withZone(ZoneId.systemDefault())
 
 private fun formatTime(timestamp: Long): String = journalTimeFormatter.format(Instant.ofEpochMilli(timestamp))

@@ -22,11 +22,13 @@ class InboxRepository(
         text: String?,
         drafts: List<AttachmentDraft>,
         source: String = InboxSource.MANUAL,
+        durationMillis: Long? = null,
     ): InboxItemEntity {
-        val item = factory.create(text, drafts, source)
+        val plan = factory.createPlan(text, drafts, source, durationMillis = durationMillis)
+        val item = plan.item
         val attachments = mutableListOf<InboxAttachmentEntity>()
         try {
-            drafts.forEach { attachments += attachmentStore.commit(item.id, it) }
+            plan.attachments.forEach { attachments += attachmentStore.commit(item.id, it) }
             dao.insertItemWithAttachments(item, attachments)
         } catch (error: Exception) {
             attachmentStore.deleteAttachments(attachments)
@@ -55,5 +57,11 @@ class InboxRepository(
         val item = dao.getById(id) ?: return
         attachmentStore.deleteAttachments(item.attachments)
         dao.deleteById(id)
+    }
+
+    suspend fun clearQueue(): Int {
+        val removed = dao.deleteAllExceptSyncing()
+        attachmentStore.deleteAttachments(removed.flatMap { it.attachments })
+        return removed.size
     }
 }

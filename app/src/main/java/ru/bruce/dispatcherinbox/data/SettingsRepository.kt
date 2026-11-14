@@ -17,8 +17,16 @@ data class AppSettings(
     val wifiOnly: Boolean = false,
     val deleteAfterSync: Boolean = false,
     val defaultOpenMode: String = "text",
+    val autoStartAssistantRecording: Boolean = false,
     val closeAfterSave: Boolean = false,
 )
+
+object DefaultOpenMode {
+    const val TEXT = "text"
+    const val VOICE = "voice"
+
+    fun normalize(value: String?): String = if (value == VOICE) VOICE else TEXT
+}
 
 class SettingsRepository(private val context: Context) {
     private object Keys {
@@ -28,6 +36,7 @@ class SettingsRepository(private val context: Context) {
         val wifiOnly = booleanPreferencesKey("wifi_only")
         val deleteAfterSync = booleanPreferencesKey("delete_after_sync")
         val defaultOpenMode = stringPreferencesKey("default_open_mode")
+        val autoStartAssistantRecording = booleanPreferencesKey("auto_start_assistant_recording")
         val closeAfterSave = booleanPreferencesKey("close_after_save")
     }
 
@@ -38,7 +47,8 @@ class SettingsRepository(private val context: Context) {
             autoSync = values[Keys.autoSync] ?: true,
             wifiOnly = values[Keys.wifiOnly] ?: false,
             deleteAfterSync = values[Keys.deleteAfterSync] ?: false,
-            defaultOpenMode = values[Keys.defaultOpenMode] ?: "text",
+            defaultOpenMode = DefaultOpenMode.normalize(values[Keys.defaultOpenMode]),
+            autoStartAssistantRecording = values[Keys.autoStartAssistantRecording] ?: false,
             closeAfterSave = values[Keys.closeAfterSave] ?: false,
         )
     }
@@ -48,7 +58,12 @@ class SettingsRepository(private val context: Context) {
     suspend fun setAutoSync(value: Boolean) = update(Keys.autoSync, value)
     suspend fun setWifiOnly(value: Boolean) = update(Keys.wifiOnly, value)
     suspend fun setDeleteAfterSync(value: Boolean) = update(Keys.deleteAfterSync, value)
-    suspend fun setDefaultOpenMode(value: String) = update(Keys.defaultOpenMode, value)
+    suspend fun setDefaultOpenMode(value: String) = update(
+        Keys.defaultOpenMode,
+        DefaultOpenMode.normalize(value),
+    )
+    suspend fun setAutoStartAssistantRecording(value: Boolean) =
+        update(Keys.autoStartAssistantRecording, value)
     suspend fun setCloseAfterSave(value: Boolean) = update(Keys.closeAfterSave, value)
 
     private suspend fun <T> update(key: androidx.datastore.preferences.core.Preferences.Key<T>, value: T) {

@@ -1,39 +1,51 @@
 package ru.bruce.dispatcherinbox.ui.theme
 
-import android.os.Build
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
-import androidx.compose.material3.dynamicDarkColorScheme
-import androidx.compose.material3.dynamicLightColorScheme
-import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
 
-private val LightColors = lightColorScheme(
-    primary = Color(0xFF4058A8),
-    onPrimary = Color.White,
-    primaryContainer = Color(0xFFDCE1FF),
-    surface = Color(0xFFF9F9FC),
-    surfaceVariant = Color(0xFFE3E3E9),
-)
+val DispatcherBackground = Color(0xFF080B12)
+val DispatcherSurface = Color(0xFF10151F)
+val DispatcherSurfaceRaised = Color(0xFF171D29)
+val DispatcherOutline = Color(0xFF34445F)
+val DispatcherBlue = Color(0xFF6AA7FF)
+val DispatcherSuccess = Color(0xFF55C98A)
+val DispatcherWarning = Color(0xFFF0C45A)
+val DispatcherError = Color(0xFFFF6B78)
 
-private val DarkColors = darkColorScheme(
-    primary = Color(0xFFB7C4FF),
-    primaryContainer = Color(0xFF293F8B),
-    surface = Color(0xFF121318),
+private val DispatcherDarkColors = darkColorScheme(
+    primary = DispatcherBlue,
+    onPrimary = Color(0xFF031A33),
+    primaryContainer = Color(0xFF17375D),
+    onPrimaryContainer = Color(0xFFD8E9FF),
+    secondary = Color(0xFFB8C7DD),
+    onSecondary = Color(0xFF223143),
+    secondaryContainer = Color(0xFF293747),
+    onSecondaryContainer = Color(0xFFD4E3F9),
+    tertiary = DispatcherWarning,
+    onTertiary = Color(0xFF3C2F00),
+    tertiaryContainer = Color(0xFF554500),
+    onTertiaryContainer = Color(0xFFFFE17D),
+    error = DispatcherError,
+    onError = Color(0xFF3F0010),
+    errorContainer = Color(0xFF5B1722),
+    onErrorContainer = Color(0xFFFFDADD),
+    background = DispatcherBackground,
+    onBackground = Color(0xFFF2F5FA),
+    surface = DispatcherSurface,
+    onSurface = Color(0xFFF2F5FA),
+    surfaceVariant = DispatcherSurfaceRaised,
+    onSurfaceVariant = Color(0xFFAEB9C9),
+    outline = DispatcherOutline,
+    outlineVariant = Color(0xFF252F40),
+    scrim = Color.Black,
 )
 
 @Composable
 fun DispatcherInboxTheme(content: @Composable () -> Unit) {
-    val context = LocalContext.current
-    val dark = isSystemInDarkTheme()
-    val colors = when {
-        Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && dark -> dynamicDarkColorScheme(context)
-        Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> dynamicLightColorScheme(context)
-        dark -> DarkColors
-        else -> LightColors
-    }
-    MaterialTheme(colorScheme = colors, content = content)
+    MaterialTheme(
+        colorScheme = DispatcherDarkColors,
+        content = content,
+    )
 }
