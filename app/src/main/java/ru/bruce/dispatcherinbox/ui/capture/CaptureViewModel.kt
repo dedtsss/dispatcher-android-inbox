@@ -31,6 +31,7 @@ import ru.bruce.dispatcherinbox.util.VoiceRecorder
 data class CaptureUiState(
     val text: String = "",
     val attachments: List<AttachmentDraft> = emptyList(),
+    val hasInitialContent: Boolean = false,
     val isRecording: Boolean = false,
     val recordingAmplitude: Float = 0f,
     val isBusy: Boolean = false,
@@ -45,23 +46,35 @@ class CaptureViewModel(
     private val repository: InboxRepository,
     settingsRepository: SettingsRepository,
     private val source: String,
+    initialText: String? = null,
+    initialUris: List<Uri> = emptyList(),
+    private val closeOnSuccessfulSave: Boolean = false,
 ) : AndroidViewModel(application) {
     private val recorder = VoiceRecorder(application)
     private val audioFeedback = AudioFeedbackManager()
-    private val localState = MutableStateFlow(CaptureUiState())
+    private val localState = MutableStateFlow(
+        CaptureUiState(
+            text = initialText.orEmpty(),
+            hasInitialContent = initialText?.isNotBlank() == true || initialUris.isNotEmpty(),
+        ),
+    )
     private val closeEvents = Channel<Unit>(Channel.BUFFERED)
-    private var closeAfterSave = false
+    private var closeAfterSave = closeOnSuccessfulSave
     private var lastSavedId: String? = null
     private var amplitudeJob: Job? = null
 
     val close = closeEvents.receiveAsFlow()
+
+    init {
+        if (initialUris.isNotEmpty()) addAttachments(initialUris)
+    }
 
     val state: StateFlow<CaptureUiState> = combine(
         localState,
         settingsRepository.settings,
         repository.items,
     ) { local, settings, items ->
-        closeAfterSave = settings.closeAfterSave
+        closeAfterSave = closeOnSuccessfulSave || settings.closeAfterSave
         val saved = lastSavedId?.let { id -> items.firstOrNull { it.item.id == id } }
         val syncMessage = when (saved?.item?.status) {
             InboxStatus.SYNCING -> "Отправляется"
@@ -152,7 +165,7 @@ class CaptureViewModel(
         }
     }
 
-    fun stopRecordingAndSave() {
+    fun stopRecordingAndAdd() {
         if (!localState.value.isRecording) return
         stopAmplitudeUpdates()
         localState.value = localState.value.copy(
@@ -165,7 +178,12 @@ class CaptureViewModel(
                 val file = withContext(Dispatchers.IO) { recorder.stop() }
                 audioFeedback.playStopSound()
                 val voice = repository.voiceDraft(file)
-                saveInternal(localState.value.attachments + voice)
+                localState.value = localState.value.copy(
+                    attachments = localState.value.attachments + voice,
+                    isBusy = false,
+                    statusMessage = "Голосовое пояснение добавлено",
+                    isError = false,
+                )
             } catch (error: Exception) {
                 audioFeedback.playErrorSound()
                 showError(error.message ?: "Не удалось сохранить запись")
@@ -243,9 +261,20 @@ class CaptureViewModel(
         private val repository: InboxRepository,
         private val settingsRepository: SettingsRepository,
         private val source: String = InboxSource.MANUAL,
+        private val initialText: String? = null,
+        private val initialUris: List<Uri> = emptyList(),
+        private val closeOnSuccessfulSave: Boolean = false,
     ) : ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST")
         override fun <T : ViewModel> create(modelClass: Class<T>): T =
-            CaptureViewModel(application, repository, settingsRepository, source) as T
+            CaptureViewModel(
+                application = application,
+                repository = repository,
+                settingsRepository = settingsRepository,
+                source = source,
+                initialText = initialText,
+                initialUris = initialUris,
+                closeOnSuccessfulSave = closeOnSuccessfulSave,
+            ) as T
     }
 }

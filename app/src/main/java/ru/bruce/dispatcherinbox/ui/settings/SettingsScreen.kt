@@ -86,24 +86,29 @@ fun SettingsScreen(
         )
         SettingSwitch("Закрывать после сохранения", settings.closeAfterSave, viewModel::setCloseAfterSave)
         HorizontalDivider()
-        Text("Открывать по умолчанию", style = MaterialTheme.typography.titleMedium)
+        Text("Автозапуск микрофона", style = MaterialTheme.typography.titleMedium)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             FilterChip(
                 selected = settings.defaultOpenMode == "text",
                 onClick = { viewModel.setDefaultOpenMode("text") },
-                label = { Text("Текст") },
+                label = { Text("Выключен") },
             )
             FilterChip(
                 selected = settings.defaultOpenMode == "voice",
                 onClick = { viewModel.setDefaultOpenMode("voice") },
-                label = { Text("Голос") },
+                label = { Text("Включен") },
             )
         }
+        Text(
+            "Работает только при ручном или assistant-запуске без переданного текста и файлов.",
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            style = MaterialTheme.typography.bodySmall,
+        )
         HorizontalDivider()
         Text("Системный ассистент", style = MaterialTheme.typography.titleMedium)
         AssistantStatus()
         Text(
-            "На HyperOS экран обычно называется «Помощник и голосовой ввод». Выберите «Диспетчер Bruce» как цифрового помощника. Голосовой ввод менять не нужно: приложение не распознает речь.",
+            "На HyperOS экран обычно называется «Помощник и голосовой ввод». Выберите «CatChing» как цифрового помощника. Голосовой ввод менять не нужно: приложение не распознает речь.",
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             style = MaterialTheme.typography.bodySmall,
         )
@@ -119,7 +124,7 @@ fun SettingsScreen(
         HorizontalDivider()
         Text("Быстрый доступ", style = MaterialTheme.typography.titleMedium)
         Text(
-            "Добавьте плитку «Диспетчер Bruce» в шторку. На защищенном экране телефон сначала попросит разблокировку, затем сразу откроет запись.",
+            "Добавьте плитку «CatChing» в шторку. На защищенном экране телефон сначала попросит разблокировку, затем сразу откроет запись.",
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             style = MaterialTheme.typography.bodySmall,
         )
@@ -167,8 +172,8 @@ private fun AssistantStatus() {
         modifier = Modifier.fillMaxWidth(),
     ) {
         Text(
-            if (active) "Системный статус: Диспетчер Bruce активен"
-            else "Системный статус: Диспетчер Bruce пока не активен",
+            if (active) "Системный статус: CatChing активен"
+            else "Системный статус: CatChing пока не активен",
             modifier = Modifier.padding(horizontal = 12.dp, vertical = 9.dp),
             style = MaterialTheme.typography.bodyMedium,
         )
