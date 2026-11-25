@@ -154,6 +154,32 @@ class DriveGatewayTest {
         } finally { file.delete() }
     }
 
+    @Test fun `частичная группа после потери ответа завершается без дубликатов частей`() = runTest {
+        val file = File.createTempFile("group-original", ".m4a").apply { writeBytes(byteArrayOf(8, 7, 6, 5)) }
+        try {
+            Server().use { server ->
+                val event = entry(files = listOf(InboxAttachmentEntity("voice", "event-1", file.path, "audio/mp4", "voice.m4a", file.length(), null)))
+                server.failUpload = true
+                val first = server.gateway.upload(event, settings)
+                assertTrue(first is UploadResult.Failure && first.retryable)
+                assertEquals(1, server.uploads)
+                val textId = server.ids.saved["$account/item/event-1/text"]
+                val folderId = server.ids.saved["$account/event/event-1"]
+                assertNotNull(textId)
+                assertNotNull(folderId)
+                assertTrue(file.exists())
+                val restarted = DriveGateway(server.ids, { "test-token" }, { DriveRestClient(it, base = server.server.url("/").toString()) })
+                assertTrue(restarted.upload(event, settings) is UploadResult.Success)
+                assertEquals(2, server.uploads)
+                assertEquals(textId, server.ids.saved["$account/item/event-1/text"])
+                assertEquals(folderId, server.ids.saved["$account/event/event-1"])
+                assertArrayEquals(file.readBytes(), server.bytes[server.ids.saved["$account/item/event-1/voice"]])
+                assertTrue(restarted.upload(event, settings) is UploadResult.Success)
+                assertEquals(2, server.uploads)
+            }
+        } finally { file.delete() }
+    }
+
     @Test fun `ошибки авторизации квоты и сети не подтверждают загрузку`() = runTest {
         for (code in listOf(401, 403, 429, 503)) Server().use { s ->
             s.rejectCode = code

@@ -20,7 +20,16 @@ import java.io.File
 import java.security.MessageDigest
 import java.util.concurrent.TimeUnit
 
-data class UpdateState(val status: UpdateStatus = UpdateStatus.CURRENT, val message: String = "", val version: String = "", val canDownload: Boolean = status == UpdateStatus.AVAILABLE || status == UpdateStatus.FAILED)
+data class UpdateState(
+    val status: UpdateStatus = UpdateStatus.CURRENT,
+    val message: String = "Проверка обновлений ещё не выполнялась",
+    val version: String = "",
+    val canDownload: Boolean = status == UpdateStatus.AVAILABLE || status == UpdateStatus.FAILED,
+    val checkedAtMillis: Long? = null,
+    val checkResult: String = "",
+    val downloadedBytes: Long? = null,
+    val totalBytes: Long? = null,
+)
 
 class UpdateController(context: Context) {
     private val context = context.applicationContext
@@ -34,12 +43,24 @@ class UpdateController(context: Context) {
         check(prefs.edit().putString("manifest", manifest.toJson()).commit()) { "Не удалось сохранить обновление" }
     }
 
+    private fun withCheckResult(state: UpdateState) = state.copy(
+        checkedAtMillis = prefs.getLong("checkedAtMillis", 0L).takeIf { it > 0 },
+        checkResult = prefs.getString("checkResult", "").orEmpty(),
+    )
+
+    private fun rememberCheck(state: UpdateState): UpdateState {
+        check(prefs.edit().putLong("checkedAtMillis", System.currentTimeMillis())
+            .putString("checkResult", state.message)
+            .putBoolean("checkFailed", state.status == UpdateStatus.FAILED).commit()) { "Не удалось сохранить результат проверки" }
+        return withCheckResult(state)
+    }
+
     suspend fun check(): UpdateState = withContext(Dispatchers.IO) { mutex.withLock {
         try {
             val existing = runCatching { recoverLocked() }.getOrNull()
-            if (existing != null && existing.status in setOf(UpdateStatus.DOWNLOADING, UpdateStatus.PAUSED, UpdateStatus.READY)) return@withLock existing
+            if (existing != null && existing.status in setOf(UpdateStatus.DOWNLOADING, UpdateStatus.PAUSED, UpdateStatus.READY)) return@withLock withCheckResult(existing)
             val url = BuildConfig.UPDATE_MANIFEST_URL
-            if (url.isBlank()) return@withLock UpdateState(message = "Канал обновлений ещё не настроен")
+            if (url.isBlank()) return@withLock rememberCheck(UpdateState(UpdateStatus.FAILED, "Канал обновлений ещё не настроен", canDownload = false))
             requireHttps(url)
             val manifest = client.newCall(Request.Builder().url(url).build()).execute().use { response ->
                 check(response.isSuccessful) { "Сервер обновлений: ${response.code}" }
@@ -59,10 +80,10 @@ class UpdateController(context: Context) {
                 UpdateManifest.parse(bytes.toString(Charsets.UTF_8))
             }
             saveManifest(manifest)
-            prefs.edit().remove("downloadId").apply()
-            if (manifest.versionCode > installed().versionCode) UpdateState(UpdateStatus.AVAILABLE, "Доступно обновление", manifest.versionName)
-            else UpdateState(UpdateStatus.CURRENT, "Установлена актуальная версия")
-        } catch (e: Exception) { failed(e) }
+            prefs.edit().remove("downloadId").remove("installRequested").apply()
+            rememberCheck(if (manifest.versionCode > installed().versionCode) UpdateState(UpdateStatus.AVAILABLE, "Доступно обновление", manifest.versionName)
+            else UpdateState(UpdateStatus.CURRENT, "Обновлений нет. Установлена актуальная версия"))
+        } catch (e: Exception) { runCatching { rememberCheck(failed(e)) }.getOrElse { failed(it) } }
     } }
 
     suspend fun download(): UpdateState = withContext(Dispatchers.IO) { mutex.withLock {
@@ -72,6 +93,7 @@ class UpdateController(context: Context) {
             val old = prefs.getLong("downloadId", -1)
             if (old != -1L) downloads.remove(old)
             privateApk.delete()
+            prefs.edit().remove("installRequested").apply()
             val target = File(context.getExternalFilesDir(null) ?: error("Хранилище недоступно"), "updates/candidate.apk")
             target.parentFile?.mkdirs()
             check(!target.exists() || target.delete()) { "Не удалось заменить APK" }
@@ -85,19 +107,28 @@ class UpdateController(context: Context) {
                 downloads.remove(id)
                 error("Не удалось сохранить загрузку")
             }
-            recoverLocked()
+            withCheckResult(recoverLocked())
         } catch (e: Exception) { failed(e) }
     } }
 
     suspend fun recover(): UpdateState = withContext(Dispatchers.IO) { mutex.withLock {
-        try { recoverLocked() } catch (e: Exception) { failed(e) }
+        try { withCheckResult(recoverLocked()) } catch (e: Exception) { failed(e) }
     } }
 
     private fun recoverLocked(): UpdateState {
-        val manifest = manifest() ?: return UpdateState(message = if (BuildConfig.UPDATE_MANIFEST_URL.isBlank()) "Канал обновлений ещё не настроен" else "")
-        if (manifest.versionCode <= installed().versionCode) return UpdateState(message = "Установлена актуальная версия")
+        val manifest = manifest() ?: return if (prefs.getBoolean("checkFailed", false))
+            UpdateState(UpdateStatus.FAILED, prefs.getString("checkResult", "Ошибка проверки").orEmpty(), canDownload = false)
+            else UpdateState(message = if (BuildConfig.UPDATE_MANIFEST_URL.isBlank()) "Канал обновлений ещё не настроен" else "Проверка обновлений ещё не выполнялась")
+        if (manifest.versionCode <= installed().versionCode) {
+            if (prefs.getBoolean("installRequested", false)) return UpdateState(message = "Обновление установлено")
+            if (prefs.getBoolean("checkFailed", false)) return UpdateState(UpdateStatus.FAILED,
+                prefs.getString("checkResult", "Ошибка проверки").orEmpty(), canDownload = false)
+            return UpdateState(message = "Обновлений нет. Установлена актуальная версия")
+        }
         val id = prefs.getLong("downloadId", -1)
-        if (id == -1L) return UpdateState(UpdateStatus.AVAILABLE, "Доступно обновление", manifest.versionName)
+        if (id == -1L) return if (prefs.getBoolean("checkFailed", false))
+            UpdateState(UpdateStatus.FAILED, prefs.getString("checkResult", "Ошибка проверки").orEmpty(), manifest.versionName, canDownload = true)
+            else UpdateState(UpdateStatus.AVAILABLE, "Доступно обновление", manifest.versionName)
         downloads.query(DownloadManager.Query().setFilterById(id)).use { cursor ->
             check(cursor != null && cursor.moveToFirst()) { "Загрузка удалена. Повторите скачивание" }
             val status = downloadStatus(cursor.getInt(cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_STATUS)))
@@ -107,11 +138,14 @@ class UpdateController(context: Context) {
                 UpdateStatus.FAILED -> "Ошибка загрузки: ${cursor.getInt(cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_REASON))}"
                 UpdateStatus.READY -> {
                     validateDownloaded(manifest)
-                    "Обновление проверено и готово к установке"
+                    if (prefs.getBoolean("installRequested", false)) "Системная установка открывалась. Установка новой версии ещё не подтверждена"
+                    else "SHA-256, пакет и подпись проверены. Обновление готово к установке"
                 }
                 else -> ""
             }
-            return UpdateState(status, message, manifest.versionName)
+            val received = cursor.getLong(cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_BYTES_DOWNLOADED_SO_FAR)).takeIf { it >= 0 }
+            val total = cursor.getLong(cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_TOTAL_SIZE_BYTES)).takeIf { it > 0 }
+            return UpdateState(status, message, manifest.versionName, downloadedBytes = received, totalBytes = total)
         }
     }
 
@@ -155,17 +189,18 @@ class UpdateController(context: Context) {
             validate(privateApk, manifest)
             if (!context.packageManager.canRequestPackageInstalls()) {
                 context.startActivity(Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:${context.packageName}")).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-                return@withLock UpdateState(UpdateStatus.READY, "Разрешите установку и снова нажмите «Установить»", manifest.versionName)
+                return@withLock withCheckResult(UpdateState(UpdateStatus.READY, "Разрешите установку и снова нажмите «Установить»", manifest.versionName))
             }
             val uri = FileProvider.getUriForFile(context, "${context.packageName}.updates", privateApk)
             context.startActivity(Intent(Intent.ACTION_VIEW).setDataAndType(uri, "application/vnd.android.package-archive")
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_GRANT_READ_URI_PERMISSION))
-            UpdateState(UpdateStatus.READY, "Открыта системная установка", manifest.versionName)
+            check(prefs.edit().putBoolean("installRequested", true).commit()) { "Не удалось сохранить этап установки" }
+            withCheckResult(UpdateState(UpdateStatus.READY, "Открыта системная установка. Завершите её в Android; установка пока не подтверждена", manifest.versionName))
         } catch (e: Exception) { failed(e) }
     } }
 
-    private fun failed(e: Exception) = UpdateState(UpdateStatus.FAILED, e.message ?: "Ошибка обновления",
-        canDownload = runCatching { manifest()?.versionCode?.let { it > installed().versionCode } == true }.getOrDefault(false))
+    private fun failed(e: Exception) = withCheckResult(UpdateState(UpdateStatus.FAILED, e.message ?: "Ошибка обновления",
+        canDownload = runCatching { manifest()?.versionCode?.let { it > installed().versionCode } == true }.getOrDefault(false)))
 }
 
 private fun ByteArray.hex() = joinToString("") { "%02x".format(it) }

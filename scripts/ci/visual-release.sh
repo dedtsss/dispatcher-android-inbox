@@ -5,5 +5,5 @@ set -euo pipefail
 mkdir -p visual
 # Снимки не должны расходовать второй запуск эмулятора; опубликованный baseline
 # используется только при его наличии после install-over в этом же build job.
-export CATCHING_VISUAL_BASELINE="${CATCHING_VISUAL_BASELINE:-history-apk/v0610/app-release.apk}"
+export CATCHING_VISUAL_BASELINE="${CATCHING_VISUAL_BASELINE:-history-apk/v0611/app-release.apk}"
 python3 scripts/ci/capture-release-ui.py

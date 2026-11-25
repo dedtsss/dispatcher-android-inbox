@@ -63,7 +63,9 @@ internal class CaptureSession(
     private val committedId = MutableStateFlow<String?>(null)
     private var amplitudeJob: kotlinx.coroutines.Job? = null
     private var captureId = java.util.UUID.randomUUID().toString()
-    private var stopAfterImport = false
+    private var attachmentImportFailed = false
+    private var stopping = false
+    private var attachmentImportJob: kotlinx.coroutines.Job? = null
     private var rawVoicePath: String? = null
     private val journal = android.util.AtomicFile(java.io.File(application.filesDir, "capture-$source.json"))
     private var lastSavedId: String? = null
@@ -150,7 +152,7 @@ internal class CaptureSession(
         if (selectedUris.isEmpty()) return
         lastSavedId = null
         localState.value = localState.value.copy(isBusy = true, localCommitted = false)
-        sessionScope.launch {
+        attachmentImportJob = sessionScope.launch {
             localState.value = localState.value.copy(
                 isBusy = true,
                 statusMessage = if (selectedUris.size == 1) "Копируем файл…"
@@ -166,7 +168,7 @@ internal class CaptureSession(
             }
             localState.value = localState.value.copy(
                 attachments = localState.value.attachments + added,
-                isBusy = false,
+                isBusy = stopping,
                 statusMessage = when {
                     failedCount == 0 && added.size == 1 -> "Файл добавлен"
                     failedCount == 0 -> "Добавлено файлов: ${added.size}"
@@ -175,8 +177,9 @@ internal class CaptureSession(
                 },
                 isError = failedCount > 0,
             )
+            attachmentImportFailed = failedCount > 0
             persistDraft()
-            if (stopAfterImport) { stopAfterImport = false; stopRecordingAndSave() }
+
         }
     }
 
@@ -234,7 +237,7 @@ internal class CaptureSession(
 
     fun stopRecordingAndSave() {
         if (!localState.value.isRecording) return
-        if (localState.value.isBusy) { stopAfterImport = true; return }
+        stopping = true
         amplitudeJob?.cancel()
         levelMeter.reset()
         localState.value = localState.value.copy(
@@ -251,12 +254,22 @@ internal class CaptureSession(
                 rawVoicePath = null
                 localState.value = localState.value.copy(attachments = localState.value.attachments + voice)
                 persistDraft()
+                attachmentImportJob?.join()
+                check(!attachmentImportFailed) { "Аудио сохранено в черновике. Не все выбранные файлы добавлены: повторите выбор файла или сохраните доступный состав" }
                 saveInternal(localState.value.attachments)
             } catch (error: Exception) {
+                rawVoicePath?.let { path ->
+                    val file = java.io.File(path)
+                    if (file.exists() && localState.value.attachments.none { it.localPath == path }) {
+                        localState.value = localState.value.copy(attachments = localState.value.attachments + AttachmentDraft(
+                            localPath = path, mimeType = "audio/mp4", originalName = "Незавершённая-${file.name}", sizeBytes = file.length(), checksum = null))
+                        persistDraft()
+                    }
+                }
                 ru.bruce.dispatcherinbox.capture.RecordingService.end(application, this@CaptureSession)
                 audioFeedback.playErrorSound()
                 showError(error.message ?: "Не удалось сохранить запись")
-            }
+            } finally { stopping = false }
         }
     }
 

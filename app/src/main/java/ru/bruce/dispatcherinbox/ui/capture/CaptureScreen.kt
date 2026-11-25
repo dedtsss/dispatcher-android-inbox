@@ -335,7 +335,7 @@ private fun VoiceControl(state: CaptureUiState, compact: Boolean, onClick: () ->
         Box(Modifier.size(if (compact) 132.dp else 156.dp).background(
             Brush.radialGradient(listOf(primary.copy(alpha = 0.10f + amplitude * 0.10f), Color.Transparent))),
             contentAlignment = Alignment.Center) {
-            Button(onClick = onClick, enabled = !state.isBusy, shape = CircleShape,
+            Button(onClick = onClick, enabled = !state.isBusy || state.isRecording, shape = CircleShape,
                 modifier = Modifier.size(if (compact) 88.dp else 100.dp),
                 contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp),
                 border = BorderStroke(1.dp, primary.copy(alpha = 0.3f)),

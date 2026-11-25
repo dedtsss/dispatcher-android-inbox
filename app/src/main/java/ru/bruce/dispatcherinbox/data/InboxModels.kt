@@ -45,6 +45,9 @@ data class InboxItemEntity(
     val lastError: String?,
     val remoteId: String?,
     val durationMillis: Long? = null,
+    val lastAttemptAt: Long? = null,
+    val syncedAt: Long? = null,
+    val originalsDeletedAt: Long? = null,
 )
 
 @Entity(

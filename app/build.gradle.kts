@@ -20,8 +20,8 @@ android {
         applicationId = "ru.bruce.dispatcherinbox"
         minSdk = 26
         targetSdk = 36
-        versionCode = 17
-        versionName = "0.6.11"
+        versionCode = 18
+        versionName = "0.6.12"
         val suppliedUpdateUrl = providers.gradleProperty("updateManifestUrl").orNull.orEmpty().trim()
         val updateUrl = suppliedUpdateUrl.ifBlank { "https://raw.githubusercontent.com/dedtsss/dispatcher-android-inbox/main/updates/update.json" }
         if (updateUrl.isNotEmpty()) {
@@ -122,6 +122,7 @@ dependencies {
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     implementation("com.google.code.gson:gson:2.13.1")
 
+    androidTestImplementation("androidx.work:work-testing:2.10.1")
     androidTestImplementation("androidx.test.ext:junit:1.2.1")
     androidTestImplementation("androidx.test:runner:1.6.2")
     androidTestImplementation("androidx.test:core-ktx:1.6.1")

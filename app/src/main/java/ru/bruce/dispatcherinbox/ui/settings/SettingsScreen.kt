@@ -5,6 +5,22 @@ import android.content.ComponentName
 import android.content.Context
 import android.os.Build
 import android.provider.Settings
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.size
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material3.Icon
+import androidx.compose.material3.RadioButton
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.style.TextOverflow
+import java.time.Instant
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -54,32 +70,66 @@ fun SettingsScreen(
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         ru.bruce.dispatcherinbox.update.UpdateSection()
+        SyncNotificationPermission()
         Text("Настройки", style = MaterialTheme.typography.headlineSmall)
         val context = LocalContext.current
-        Surface(
-            shape = RoundedCornerShape(24.dp),
-            color = MaterialTheme.colorScheme.surfaceVariant,
-        ) {
-            Column(Modifier.fillMaxWidth().padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text("Google Drive", style = MaterialTheme.typography.titleLarge)
-                Text(settings.driveAccount.ifBlank { "Аккаунт не выбран" })
-                Text(settings.driveStatus, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                var diagnosticsExpanded by remember { mutableStateOf(false) }
-                androidx.compose.material3.TextButton(colors = androidx.compose.material3.ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.onSurfaceVariant), onClick = { diagnosticsExpanded = !diagnosticsExpanded }) { Text("Диагностика подключения") }
-                if (diagnosticsExpanded) androidx.compose.foundation.text.selection.SelectionContainer {
-                    Text(settings.driveDiagnostics.ifBlank { "Диагностика появится после попытки подключения" }, style = MaterialTheme.typography.bodySmall)
+        var driveExpanded by rememberSaveable { mutableStateOf(false) }
+        Surface(shape = RoundedCornerShape(16.dp), color = MaterialTheme.colorScheme.surfaceVariant) {
+            Column(Modifier.fillMaxWidth()) {
+                Row(Modifier.fillMaxWidth().heightIn(min = 64.dp).clickable(role = Role.Button,
+                    onClickLabel = if (driveExpanded) "Свернуть Google Drive" else "Подробности Google Drive") { driveExpanded = !driveExpanded }
+                    .padding(horizontal = 14.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text("Google Drive", style = MaterialTheme.typography.titleMedium)
+                        Text(if (settings.driveAccount.isBlank()) "Не подключён" else settings.driveStatus.substringBefore('·').trim().ifBlank { "Аккаунт выбран" },
+                            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 2, overflow = TextOverflow.Ellipsis)
+                    }
+                    Icon(if (driveExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore, null, Modifier.size(24.dp))
                 }
-                Text("Оригиналы → Мой диск / Catching / Inbox. Без сети всё сохраняется на телефоне.")
-                Button(onClick = {
+                if (driveExpanded) Column(Modifier.padding(horizontal = 14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(settings.driveAccount.ifBlank { "Аккаунт не выбран" }, style = MaterialTheme.typography.bodyMedium)
+                    Text(settings.driveStatus, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
+                    Text("Оригиналы → Мой диск / Catching / Inbox. Без сети всё сохраняется на телефоне.", style = MaterialTheme.typography.bodySmall)
+                    var diagnosticsExpanded by rememberSaveable { mutableStateOf(false) }
+                    TextButton(onClick = { diagnosticsExpanded = !diagnosticsExpanded }, modifier = Modifier.heightIn(min = 48.dp)) {
+                        Text(if (diagnosticsExpanded) "Скрыть диагностику подключения" else "Диагностика подключения")
+                    }
+                    if (diagnosticsExpanded) androidx.compose.foundation.text.selection.SelectionContainer {
+                        Text(settings.driveDiagnostics.ifBlank { "Диагностика появится после попытки подключения" }, style = MaterialTheme.typography.bodySmall)
+                    }
+                }
+                if (driveExpanded || settings.driveAccount.isBlank()) TextButton(onClick = {
                     context.startActivity(android.content.Intent(context, ru.bruce.dispatcherinbox.drive.DriveConnectActivity::class.java))
-                }, modifier = Modifier.fillMaxWidth()) {
+                }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
                     Text(if (settings.driveAccount.isBlank()) "Подключить Google Drive" else "Подключить повторно")
                 }
             }
         }
         SettingSwitch("Автосинхронизация", settings.autoSync, viewModel::setAutoSync)
         SettingSwitch("Только по Wi-Fi", settings.wifiOnly, viewModel::setWifiOnly)
-        Text("Панель ассистента закрывается сразу после сохранения на телефоне", style = MaterialTheme.typography.bodySmall)
+        if (settings.syncLastAttemptAt > 0L) {
+            Text("Последняя попытка отправки: ${formatSettingsTime(settings.syncLastAttemptAt)}", style = MaterialTheme.typography.bodySmall)
+            Text(settings.syncLastResult.ifBlank { "Попытка началась; подтверждения результата пока нет" },
+                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        var cleanupExpanded by rememberSaveable { mutableStateOf(false) }
+        val policies = listOf("keep" to "Не удалять", "after_upload" to "После подтверждённой загрузки", "after_7_days" to "Через 7 дней после загрузки")
+        TextButton(onClick = { cleanupExpanded = !cleanupExpanded }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
+            Text("Локальные копии: ${policies.firstOrNull { it.first == settings.localCopyPolicy }?.second ?: "Не удалять"}")
+        }
+        if (cleanupExpanded) {
+            Text("Очистка только файлов после подтверждённой загрузки полного состава записи в Drive. Метаданные остаются; неотправленные и ошибочные оригиналы сохраняются. Политика применяется только к новым записям, созданным после её включения; старые записи автоматически не очищаются.",
+                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            policies.forEach { (value, label) ->
+                Row(Modifier.fillMaxWidth().heightIn(min = 48.dp).selectable(selected = settings.localCopyPolicy == value,
+                    role = Role.RadioButton, onClick = { viewModel.setLocalCopyPolicy(value) }), verticalAlignment = Alignment.CenterVertically) {
+                    RadioButton(selected = settings.localCopyPolicy == value, onClick = null)
+                    Text(label, modifier = Modifier.padding(start = 8.dp), style = MaterialTheme.typography.bodyMedium)
+                }
+            }
+        }
+        Text("После локального сохранения панель показывает подтверждение и закрывается. Отправка в Drive выполняется отдельно.", style = MaterialTheme.typography.bodySmall)
         HorizontalDivider()
         Text("Открывать по умолчанию", style = MaterialTheme.typography.titleMedium)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -187,4 +237,25 @@ private fun isAssistantRoleHeld(context: Context): Boolean {
     val selectedComponent = Settings.Secure.getString(context.contentResolver, "assistant")
         ?.let(ComponentName::unflattenFromString)
     return selectedComponent?.packageName == context.packageName
+}
+
+private fun formatSettingsTime(timestamp: Long): String = DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm")
+    .withZone(ZoneId.systemDefault()).format(Instant.ofEpochMilli(timestamp))
+
+@androidx.compose.runtime.Composable
+private fun SyncNotificationPermission() {
+    if (android.os.Build.VERSION.SDK_INT < 33) return
+    val context = LocalContext.current
+    var allowed by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(
+        androidx.core.content.ContextCompat.checkSelfPermission(context, android.Manifest.permission.POST_NOTIFICATIONS) == android.content.pm.PackageManager.PERMISSION_GRANTED
+    ) }
+    val launcher = androidx.activity.compose.rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.RequestPermission(),
+    ) { allowed = it }
+    if (!allowed) Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Text("Уведомления о задержке отправки отключены в Android", style = MaterialTheme.typography.bodySmall)
+        TextButton(onClick = { launcher.launch(android.Manifest.permission.POST_NOTIFICATIONS) }, modifier = Modifier.heightIn(min = 48.dp)) {
+            Text("Разрешить уведомления")
+        }
+    }
 }

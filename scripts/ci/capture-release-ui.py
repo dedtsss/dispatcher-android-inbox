@@ -13,7 +13,7 @@ assert os.environ.get('GITHUB_ACTIONS') == 'true'
 assert os.environ.get('GITHUB_REPOSITORY') == 'dedtsss/dispatcher-android-inbox'
 OUT = Path('visual')
 PKG = 'ru.bruce.dispatcherinbox'
-APK = Path('release/catching-0.6.11-release.apk')
+APK = Path('release/catching-0.6.12-release.apk')
 BASE = Path(os.environ['CATCHING_VISUAL_BASELINE'])
 
 
@@ -32,6 +32,16 @@ def snapshot(name):
     adb('pull', '/sdcard/catching-window.xml', str(OUT / (name + '.xml')))
     (OUT / (name + '.png')).write_bytes(adb('exec-out', 'screencap', '-p'))
     return ET.parse(OUT / (name + '.xml')).getroot()
+
+
+def current():
+    adb('shell', 'uiautomator', 'dump', '/sdcard/catching-window.xml')
+    adb('pull', '/sdcard/catching-window.xml', str(OUT / 'current.xml'))
+    return ET.parse(OUT / 'current.xml').getroot()
+
+
+def visible_text(root, label):
+    return [n for n in root.iter('node') if n.get('text') == label and len(bounds(n)) == 4 and bounds(n)[3] > bounds(n)[1]]
 
 
 def bounds(node):
@@ -71,16 +81,17 @@ try:
     # доказательства уже сохранены, данные физического телефона не затрагиваются.
     adb('uninstall', PKG, check=False)
     if BASE.exists():
-        assert hashlib.sha256(BASE.read_bytes()).hexdigest() == '366156f0cb087475f52257d04ccd010a0d6969ab845495cd8925df5943182900'
+        assert hashlib.sha256(BASE.read_bytes()).hexdigest() == '4dde0d3deed2ee8f132af8bbd2810f6716e0c5e2480b98332e54f10dd465ae88'
         adb('install', str(BASE))
         screen(390, 844)
         launch()
-        snapshot('capture-before-0.6.10-390')
+        snapshot('capture-before-0.6.11-390')
         adb('shell', 'am', 'force-stop', PKG)
         adb('install', '-r', str(APK))
     else:
         adb('install', str(APK))
     adb('shell', 'pm', 'grant', PKG, 'android.permission.RECORD_AUDIO')
+    adb('shell', 'pm', 'grant', PKG, 'android.permission.POST_NOTIFICATIONS')
     (OUT / 'installed-release-package.txt').write_bytes(adb('shell', 'dumpsys', 'package', PKG))
     for width, height in [(360, 800), (390, 844), (412, 915), (360, 640)]:
         key = f'{width}x{height}'
@@ -125,11 +136,45 @@ try:
             adb('shell', 'am', 'force-stop', PKG)
     screen(390, 844)
     launch()
+    root = current()
+    tap(root, 'Настройки')
+    root = snapshot('capture-settings-compact-390')
+    tap(root, 'Google Drive')
+    root = snapshot('capture-settings-drive-details-390')
+    tap(root, 'Google Drive')
+    for attempt in range(8):
+        root = current()
+        headings = visible_text(root, 'При вызове ассистента')
+        if headings and bounds(headings[-1])[1] < 1000 and visible_text(root, 'Голос'):
+            break
+        adb('shell', 'input', 'swipe', '750', '1300', '750', '500', '300')
+        time.sleep(0.5)
+    else:
+        raise AssertionError('Не найдена настройка режима ассистента')
+    tap(root, 'Голос')
+    root = snapshot('capture-settings-assistant-options-390')
+    tap(root, 'Записать')
     adb('shell', 'am', 'start', '-W', '-a', 'android.intent.action.ASSIST', '-n', PKG + '/.assistant.AssistantEntryActivity')
     time.sleep(2)
-    snapshot('capture-assistant-390')
+    root = snapshot('capture-assistant-idle-390')
+    idle_top = target(root, 'Закрыть ассистент')[1]
+    tap(root, 'Начать запись')
+    root = snapshot('capture-assistant-recording-390')
+    recording_top = target(root, 'Закрыть ассистент')[1]
+    assert abs(idle_top - recording_top) <= 4, ('Высота панели изменилась', idle_top, recording_top)
+    assert target(root, 'Файл')
+    # Настоящий системный picker открывается при активной записи; отмена не обрывает запись.
+    tap(root, 'Файл')
+    snapshot('capture-assistant-file-picker-390')
+    adb('shell', 'input', 'keyevent', '4')
+    root = snapshot('capture-assistant-file-return-390')
+    assert target(root, 'Остановить и сохранить')
+    tap(root, 'Остановить и сохранить')
+    root = snapshot('capture-assistant-saved-return-390')
+    assert not any(n.get('content-desc') == 'Закрыть ассистент' for n in root.iter('node'))
+    geometry['assistant390'] = {'idleHeaderTopPx': idle_top, 'recordingHeaderTopPx': recording_top, 'signal': 'AVD: не физический телефон'}
     (OUT / 'capture-geometry.json').write_text(json.dumps(geometry, ensure_ascii=False, indent=2))
-    (OUT / 'capture-source.json').write_text(json.dumps({'head': Path('release/source-head.txt').read_text().strip(), 'releaseSha256': hashlib.sha256(APK.read_bytes()).hexdigest(), 'baseline': 'v0.6.10' if BASE.exists() else None, 'signal': 'Эмулятор: системный микрофон; не физическая речь и не калибровка чувствительности.'}, ensure_ascii=False, indent=2))
+    (OUT / 'capture-source.json').write_text(json.dumps({'head': Path('release/source-head.txt').read_text().strip(), 'releaseSha256': hashlib.sha256(APK.read_bytes()).hexdigest(), 'baseline': 'v0.6.11' if BASE.exists() else None, 'signal': 'Эмулятор: системный микрофон; не физическая речь и не калибровка чувствительности.'}, ensure_ascii=False, indent=2))
 finally:
     adb('shell', 'wm', 'size', 'reset', check=False)
     adb('shell', 'wm', 'density', 'reset', check=False)

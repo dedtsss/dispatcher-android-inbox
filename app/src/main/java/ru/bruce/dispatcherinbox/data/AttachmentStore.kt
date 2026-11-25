@@ -99,6 +99,21 @@ class AttachmentStore(private val context: Context) {
             }
         }
 
+    suspend fun deleteConfirmedOriginals(entry: InboxItemWithAttachments) = withContext(Dispatchers.IO) {
+        val directory = File(itemsDir, entry.item.id).canonicalFile
+        val root = itemsDir.canonicalFile
+        require(directory.parentFile == root) { "Недопустимый каталог оригиналов" }
+        val files = entry.attachments.map { attachment ->
+            File(attachment.localPath).canonicalFile.also {
+                require(it.parentFile == directory) { "Оригинал вне каталога события; очистка отменена" }
+            }
+        }
+        // При частичном сбое метаданные не отмечаются очищенными. Повтор удалит
+        // оставшиеся файлы; удалённые байты уже подтверждены полным успехом Drive.
+        files.forEach { require(!it.exists() || it.delete()) { "Не удалось очистить локальную копию" } }
+        if (directory.listFiles().isNullOrEmpty()) directory.delete()
+    }
+
     fun newVoiceFile(): File {
         stagingDir.mkdirs()
         return File(stagingDir, "voice-${System.currentTimeMillis()}.m4a")

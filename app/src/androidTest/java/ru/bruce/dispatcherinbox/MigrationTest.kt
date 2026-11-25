@@ -21,7 +21,7 @@ class MigrationTest {
             assertFalse(settings.autoSync)
         }
         val room = Room.databaseBuilder(context, InboxDatabase::class.java, "dispatcher-inbox.db")
-            .addMigrations(InboxDatabase.MIGRATION_1_3, InboxDatabase.MIGRATION_2_3).build()
+            .addMigrations(InboxDatabase.MIGRATION_1_3, InboxDatabase.MIGRATION_2_3, InboxDatabase.MIGRATION_3_4).build()
         try {
             for (status in listOf("queued", "error", "synced")) {
                 val saved = room.inboxDao().getById("upgrade-$status")!!
@@ -34,6 +34,9 @@ class MigrationTest {
                 assertEquals("ошибка", saved.item.lastError)
                 assertEquals("remote-old", saved.item.remoteId)
                 assertEquals(if (args.getString("historicalDuration") == "true") 12345L else null, saved.item.durationMillis)
+                assertNull(saved.item.lastAttemptAt)
+                assertNull(saved.item.syncedAt)
+                assertNull(saved.item.originalsDeletedAt)
                 val attachment = saved.attachments.single()
                 assertEquals("исходник.m4a", attachment.originalName)
                 assertEquals("audio/mp4", attachment.mimeType)
@@ -44,7 +47,7 @@ class MigrationTest {
                 assertEquals(MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(it) }, attachment.checksum)
             }
             if (args.getString("historicalDrive") == "true") assertEquals("reserved-drive-id", room.inboxDao().driveId("upgrade/account"))
-            assertEquals(3, room.openHelper.writableDatabase.version)
+            assertEquals(4, room.openHelper.writableDatabase.version)
         } finally { room.close() }
     }
 }

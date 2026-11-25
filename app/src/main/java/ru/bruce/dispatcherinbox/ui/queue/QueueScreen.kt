@@ -1,5 +1,18 @@
 package ru.bruce.dispatcherinbox.ui.queue
 
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.text.selection.SelectionContainer
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material3.AlertDialog
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.semantics.Role
+import java.util.Locale
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -16,7 +29,6 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -51,7 +63,7 @@ fun QueueScreen(viewModel: QueueViewModel) {
                 modifier = Modifier.padding(top = 40.dp),
             )
         } else {
-            LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            LazyColumn(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 items(entries, key = { it.item.id }) { entry ->
                     QueueCard(entry, settings.driveAccount.isNotBlank(), connect, viewModel::retry, viewModel::delete)
                 }
@@ -70,53 +82,79 @@ private fun QueueCard(
 ) {
     val item = entry.item
     val delivery = ru.bruce.dispatcherinbox.ui.deliveryStatus(item.status, driveConnected)
-    Card(shape = RoundedCornerShape(18.dp), modifier = Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Text(typeLabel(item.type), style = MaterialTheme.typography.labelLarge)
-                StatusBadge(delivery)
+    var expanded by rememberSaveable(item.id) { mutableStateOf(false) }
+    var confirmDelete by rememberSaveable(item.id) { mutableStateOf(false) }
+    val summary = item.text?.takeIf { it.isNotBlank() }
+        ?: entry.attachments.firstOrNull()?.originalName?.takeIf { it.isNotBlank() }
+        ?: typeLabel(item.type)
+    val totalBytes = entry.attachments.sumOf { it.sizeBytes.coerceAtLeast(0) } + (item.text?.toByteArray(Charsets.UTF_8)?.size ?: 0)
+    Card(shape = RoundedCornerShape(14.dp), modifier = Modifier.fillMaxWidth()) {
+        Column {
+            Column(
+                Modifier.fillMaxWidth().heightIn(min = 80.dp)
+                    .clickable(role = Role.Button, onClickLabel = if (expanded) "Свернуть запись" else "Подробности записи") { expanded = !expanded }
+                    .padding(horizontal = 12.dp, vertical = 10.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("${typeLabel(item.type)} · $summary", maxLines = 1, overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
+                    Icon(if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore, contentDescription = null,
+                        modifier = Modifier.size(20.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                Text("${formatTime(item.createdAt)} · ${formatSize(totalBytes)}",
+                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(delivery.label, style = MaterialTheme.typography.labelMedium,
+                    color = if (delivery.isError) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant)
+                item.lastError?.takeIf { item.status == InboxStatus.ERROR }?.let {
+                    Text(it, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                        color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+                }
             }
-            val summary = item.text ?: entry.attachments.joinToString { it.originalName ?: "Вложение" }
-            Text(summary, maxLines = 2, overflow = TextOverflow.Ellipsis)
-            Text(
-                formatTime(item.createdAt),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            item.lastError?.takeIf { delivery.isError }?.let {
-                Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
-            }
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            if (expanded) Column(Modifier.fillMaxWidth().padding(start = 12.dp, end = 12.dp, bottom = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                item.text?.takeIf { it.isNotBlank() }?.let { SelectionContainer { Text(it, style = MaterialTheme.typography.bodyMedium) } }
+                Text("Размер оригиналов: ${formatSize(totalBytes)}", style = MaterialTheme.typography.bodySmall)
+                entry.attachments.forEach { attachment ->
+                    Text("${attachment.originalName ?: "Вложение"} · ${formatSize(attachment.sizeBytes)}",
+                        style = MaterialTheme.typography.bodySmall)
+                }
+                item.durationMillis?.let { duration ->
+                    Text("Длительность: %d:%02d".format(duration / 60000, duration / 1000 % 60), style = MaterialTheme.typography.bodySmall)
+                }
+                item.lastAttemptAt?.let { Text("Последняя попытка: ${formatTime(it)}", style = MaterialTheme.typography.bodySmall) }
+                if (item.retryCount > 0) Text("Неудачных попыток: ${item.retryCount}", style = MaterialTheme.typography.bodySmall)
+                item.lastError?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
+                item.syncedAt?.let { Text("Загрузка подтверждена: ${formatTime(it)}", style = MaterialTheme.typography.bodySmall) }
+                item.originalsDeletedAt?.let { Text("Локальные копии файлов очищены: ${formatTime(it)}. Метаданные сохранены.",
+                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
                 if (item.status == InboxStatus.ERROR || item.status == InboxStatus.QUEUED) {
-                    OutlinedButton(colors = androidx.compose.material3.ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.onSurface), onClick = { if (delivery.waitingForDrive) onConnect() else onRetry(item.id) }) {
+                    OutlinedButton(colors = androidx.compose.material3.ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.onSurface),
+                        onClick = { if (delivery.waitingForDrive) onConnect() else onRetry(item.id) }, modifier = Modifier.heightIn(min = 48.dp)) {
                         Icon(Icons.Default.Refresh, contentDescription = null)
                         Text(if (delivery.waitingForDrive) "Подключить Drive" else if (item.status == InboxStatus.ERROR) "Повторить" else "Отправить")
                     }
                 }
                 if (item.status != InboxStatus.SYNCING) {
-                    TextButton(colors = androidx.compose.material3.ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.onSurfaceVariant), onClick = { onDelete(item.id) }) {
+                    TextButton(colors = androidx.compose.material3.ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error),
+                        onClick = { confirmDelete = true }, modifier = Modifier.heightIn(min = 48.dp)) {
                         Icon(Icons.Default.DeleteOutline, contentDescription = null)
-                        Text("Удалить локально")
+                        Text("Удалить запись с телефона")
                     }
                 }
             }
         }
     }
-}
-
-@Composable
-private fun StatusBadge(delivery: ru.bruce.dispatcherinbox.ui.DeliveryStatus) {
-    val isError = delivery.isError
-    Surface(
-        color = if (isError) MaterialTheme.colorScheme.errorContainer else MaterialTheme.colorScheme.secondaryContainer,
-        shape = RoundedCornerShape(10.dp),
-    ) {
-        Text(
-            delivery.label,
-            style = MaterialTheme.typography.labelMedium,
-            modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
-        )
-    }
+    if (confirmDelete) AlertDialog(
+        onDismissRequest = { confirmDelete = false },
+        title = { Text("Удалить запись с телефона?") },
+        text = { Text(if (item.status == InboxStatus.SYNCED)
+            "Запись и оставшиеся локальные оригиналы будут удалены с телефона. Файлы в Google Drive не удаляются."
+            else "Отправка полного состава записи в Drive не подтверждена. Запись и её локальные оригиналы будут удалены без возможности восстановления из Catching.") },
+        confirmButton = { TextButton(onClick = { confirmDelete = false; if (item.status != InboxStatus.SYNCING) onDelete(item.id) },
+            enabled = item.status != InboxStatus.SYNCING) { Text("Удалить", color = MaterialTheme.colorScheme.error) } },
+        dismissButton = { TextButton(onClick = { confirmDelete = false }) { Text("Отмена") } },
+    )
 }
 
 private fun typeLabel(type: String) = when (type) {
@@ -132,3 +170,10 @@ private fun typeLabel(type: String) = when (type) {
 private fun formatTime(timestamp: Long): String = DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm")
     .withZone(ZoneId.systemDefault())
     .format(Instant.ofEpochMilli(timestamp))
+
+private fun formatSize(bytes: Long): String = when {
+    bytes < 1024 -> "${bytes.coerceAtLeast(0)} Б"
+    bytes < 1024 * 1024 -> String.format(Locale.forLanguageTag("ru"), "%.1f КиБ", bytes / 1024.0)
+    bytes < 1024 * 1024 * 1024 -> String.format(Locale.forLanguageTag("ru"), "%.1f МиБ", bytes / (1024.0 * 1024))
+    else -> String.format(Locale.forLanguageTag("ru"), "%.1f ГиБ", bytes / (1024.0 * 1024 * 1024))
+}

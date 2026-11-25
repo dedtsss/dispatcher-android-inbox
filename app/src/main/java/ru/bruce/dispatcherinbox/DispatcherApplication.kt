@@ -21,7 +21,7 @@ class DispatcherApplication : Application() {
         super.onCreate()
         container = AppContainer(this)
         kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.IO).launch {
-            runCatching { SyncScheduler(this@DispatcherApplication, container.settingsRepository).scheduleAutomatic() }
+            SyncScheduler(this@DispatcherApplication, container.settingsRepository).repair()
         }
     }
 }
@@ -31,7 +31,7 @@ class AppContainer(application: Application) {
         application,
         InboxDatabase::class.java,
         "dispatcher-inbox.db",
-    ).addMigrations(InboxDatabase.MIGRATION_1_3, InboxDatabase.MIGRATION_2_3).build()
+    ).addMigrations(InboxDatabase.MIGRATION_1_3, InboxDatabase.MIGRATION_2_3, InboxDatabase.MIGRATION_3_4).build()
 
     val dao: InboxDao = database.inboxDao()
     val settingsRepository = SettingsRepository(application)

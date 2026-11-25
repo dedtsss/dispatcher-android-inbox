@@ -146,7 +146,7 @@ class CaptureIntegrationTest {
         container.dao.updateStatus(savedText.id, InboxStatus.SYNCING, System.currentTimeMillis(), null)
         container.dao.putDriveId(DriveCheckpoint("test/account/item", "reserved-id"))
         val reopened = Room.databaseBuilder(context, InboxDatabase::class.java, "dispatcher-inbox.db")
-            .addMigrations(InboxDatabase.MIGRATION_1_3, InboxDatabase.MIGRATION_2_3).build()
+            .addMigrations(InboxDatabase.MIGRATION_1_3, InboxDatabase.MIGRATION_2_3, InboxDatabase.MIGRATION_3_4).build()
         reopened.inboxDao().recoverInterruptedSyncs("Проверка восстановления")
         assertEquals(InboxStatus.ERROR, reopened.inboxDao().getById(savedText.id)!!.item.status)
         assertEquals("reserved-id", reopened.inboxDao().driveId("test/account/item"))

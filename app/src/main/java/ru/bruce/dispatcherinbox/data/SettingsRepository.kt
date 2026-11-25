@@ -2,6 +2,7 @@ package ru.bruce.dispatcherinbox.data
 
 import android.content.Context
 import androidx.datastore.preferences.core.booleanPreferencesKey
+import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
@@ -20,10 +21,19 @@ data class AppSettings(
     val wifiOnly: Boolean = false,
     val defaultOpenMode: String = "text",
     val closeAfterSave: Boolean = false,
+    val localCopyPolicy: String = "keep",
+    val cleanupEnabledAt: Long = 0,
+    val syncLastAttemptAt: Long = 0,
+    val syncLastResult: String = "Попыток отправки ещё не было",
+
 )
 
 class SettingsRepository(private val context: Context) {
     private object Keys {
+        val localCopyPolicy = stringPreferencesKey("local_copy_policy")
+        val cleanupEnabledAt = longPreferencesKey("cleanup_enabled_at")
+        val syncLastAttemptAt = longPreferencesKey("sync_last_attempt_at")
+        val syncLastResult = stringPreferencesKey("sync_last_result")
         val driveAccount = stringPreferencesKey("drive_account")
         val driveDiagnostics = stringPreferencesKey("drive_diagnostics")
         val assistantOpenMode = stringPreferencesKey("assistant_open_mode")
@@ -37,6 +47,10 @@ class SettingsRepository(private val context: Context) {
 
     val settings: Flow<AppSettings> = context.settingsDataStore.data.map { values ->
         AppSettings(
+            localCopyPolicy = values[Keys.localCopyPolicy] ?: "keep",
+            cleanupEnabledAt = values[Keys.cleanupEnabledAt] ?: 0,
+            syncLastAttemptAt = values[Keys.syncLastAttemptAt] ?: 0,
+            syncLastResult = values[Keys.syncLastResult] ?: "Попыток отправки ещё не было",
             driveDiagnostics = values[Keys.driveDiagnostics].orEmpty(),
             assistantOpenMode = values[Keys.assistantOpenMode] ?: "text",
             autoStartAssistantRecording = values[Keys.autoStartAssistantRecording] ?: false,
@@ -47,6 +61,24 @@ class SettingsRepository(private val context: Context) {
             defaultOpenMode = values[Keys.defaultOpenMode] ?: "text",
             closeAfterSave = values[Keys.closeAfterSave] ?: false,
         )
+    }
+
+    suspend fun setLocalCopyPolicy(value: String) {
+        require(value in setOf("keep", "after_upload", "after_7_days"))
+        context.settingsDataStore.edit {
+            if (it[Keys.localCopyPolicy] != value) it[Keys.cleanupEnabledAt] = System.currentTimeMillis()
+            it[Keys.localCopyPolicy] = value
+        }
+        ru.bruce.dispatcherinbox.sync.SyncScheduler(context, this).ensureRepairScheduled()
+    }
+
+    suspend fun setSyncResult(value: String) = update(Keys.syncLastResult, value)
+
+    suspend fun setSyncDiagnostics(at: Long, result: String) {
+        context.settingsDataStore.edit {
+            it[Keys.syncLastAttemptAt] = at
+            it[Keys.syncLastResult] = result
+        }
     }
 
     suspend fun setDriveDiagnostics(value: String) = update(Keys.driveDiagnostics, value)
