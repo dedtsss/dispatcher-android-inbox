@@ -63,6 +63,7 @@ internal class CaptureSession(
     private val committedId = MutableStateFlow<String?>(null)
     private var amplitudeJob: kotlinx.coroutines.Job? = null
     private var captureId = java.util.UUID.randomUUID().toString()
+    private var fileSelection: kotlinx.coroutines.CompletableDeferred<Unit>? = null
     private var attachmentImportFailed = false
     private var stopping = false
     private var attachmentImportJob: kotlinx.coroutines.Job? = null
@@ -138,7 +139,7 @@ internal class CaptureSession(
     )
 
     fun setText(value: String) {
-        if (value != localState.value.text) lastSavedId = null
+        if (value != localState.value.text) { lastSavedId = null; captureId = java.util.UUID.randomUUID().toString() }
         localState.value = localState.value.copy(text = value, statusMessage = null, isError = false, localCommitted = false)
         persistDraft()
     }
@@ -147,10 +148,13 @@ internal class CaptureSession(
         addAttachments(listOf(uri))
     }
 
+    fun beginFileSelection() { fileSelection = kotlinx.coroutines.CompletableDeferred() }
+
     fun addAttachments(uris: List<Uri>) {
         val selectedUris = uris.distinct()
-        if (selectedUris.isEmpty()) return
+        if (selectedUris.isEmpty()) { fileSelection?.complete(Unit); return }
         lastSavedId = null
+        captureId = java.util.UUID.randomUUID().toString()
         localState.value = localState.value.copy(isBusy = true, localCommitted = false)
         attachmentImportJob = sessionScope.launch {
             localState.value = localState.value.copy(
@@ -181,9 +185,11 @@ internal class CaptureSession(
             persistDraft()
 
         }
+        fileSelection?.complete(Unit)
     }
 
     fun removeAttachment(draft: AttachmentDraft) {
+        captureId = java.util.UUID.randomUUID().toString()
         sessionScope.launch {
             repository.discardDraft(draft)
             localState.value = localState.value.copy(
@@ -197,8 +203,9 @@ internal class CaptureSession(
     fun startRecording() {
         if (localState.value.isRecording || localState.value.isBusy || committedId.value != null && source == InboxSource.ASSISTANT) return
         lastSavedId = null
+        captureId = java.util.UUID.randomUUID().toString()
         runCatching {
-            ru.bruce.dispatcherinbox.capture.RecordingService.begin(application, this, ::stopRecordingAndSave)
+            ru.bruce.dispatcherinbox.capture.RecordingService.begin(application, this, source, ::stopRecordingAndSave)
             val voiceFile = repository.newVoiceFile()
             rawVoicePath = voiceFile.absolutePath
             check(persistDraft()) { "Не удалось защитить черновик. Освободите место и повторите" }
@@ -254,6 +261,7 @@ internal class CaptureSession(
                 rawVoicePath = null
                 localState.value = localState.value.copy(attachments = localState.value.attachments + voice)
                 persistDraft()
+                fileSelection?.await()
                 attachmentImportJob?.join()
                 check(!attachmentImportFailed) { "Аудио сохранено в черновике. Не все выбранные файлы добавлены: повторите выбор файла или сохраните доступный состав" }
                 saveInternal(localState.value.attachments)
@@ -304,6 +312,9 @@ internal class CaptureSession(
                         savedOriginalBytes = drafts.sumOf { it.sizeBytes },
                         defaultOpenMode = localState.value.defaultOpenMode,
                     )
+                    attachmentImportFailed = false
+                    attachmentImportJob = null
+                    fileSelection = null
                     journal.delete()
                     rawVoicePath = null
                     committedId.value = item.id
@@ -347,6 +358,7 @@ class CaptureViewModel(
     val state get() = session.state
     val close get() = session.close
     fun setText(value: String) = session.setText(value)
+    fun beginFileSelection() = session.beginFileSelection()
     fun addAttachment(uri: Uri) = session.addAttachment(uri)
     fun addAttachments(uris: List<Uri>) = session.addAttachments(uris)
     fun removeAttachment(draft: AttachmentDraft) = session.removeAttachment(draft)

@@ -191,7 +191,7 @@ fun CaptureScreen(
         Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             OutlinedButton(colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.onSurface), onClick = { textExpanded = !textExpanded }, enabled = !state.isBusy && !state.isRecording,
                 modifier = Modifier.weight(1f)) { Icon(if (compact && textExpanded) Icons.Default.Mic else Icons.Default.Keyboard, null, Modifier.size(18.dp)); Spacer(Modifier.width(6.dp)); Text(if (compact && textExpanded) "Голос" else "Текст") }
-            OutlinedButton(colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.onSurface), onClick = { filePicker.launch("*/*") }, enabled = !state.isBusy,
+            OutlinedButton(colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.onSurface), onClick = { viewModel.beginFileSelection(); filePicker.launch("*/*") }, enabled = !state.isBusy,
                 modifier = Modifier.weight(1f)) { Icon(Icons.Default.AttachFile, null, Modifier.size(18.dp)); Spacer(Modifier.width(6.dp)); Text("Файл") }
         }
         } else {
@@ -217,7 +217,7 @@ fun CaptureScreen(
                 ),
                 shape = RoundedCornerShape(20.dp),
                 border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-                onClick = { filePicker.launch("*/*") }, enabled = !state.isBusy,
+                onClick = { viewModel.beginFileSelection(); filePicker.launch("*/*") }, enabled = !state.isBusy,
                 modifier = Modifier.weight(1f).heightIn(min = 64.dp),
             ) {
                 Icon(Icons.Default.FolderOpen, null, Modifier.size(24.dp))
@@ -302,7 +302,7 @@ private fun FullscreenVoiceControl(state: CaptureUiState, shortScreen: Boolean, 
                 ), contentAlignment = Alignment.Center,
             ) {
                 Button(
-                    onClick = onClick, enabled = !state.isBusy, shape = CircleShape,
+                    onClick = onClick, enabled = state.isRecording || !state.isBusy, shape = CircleShape,
                     modifier = Modifier.size(diameter), contentPadding = PaddingValues(0.dp),
                     border = BorderStroke(3.dp, accent),
                     colors = ButtonDefaults.buttonColors(containerColor = Color.Transparent, contentColor = Color(0xFFF4EAFF)),

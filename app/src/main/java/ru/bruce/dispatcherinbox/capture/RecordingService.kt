@@ -19,7 +19,8 @@ class RecordingService : Service() {
         super.onCreate()
         val manager = getSystemService(NotificationManager::class.java)
         manager.createNotificationChannel(NotificationChannel(CHANNEL, "Запись голоса", NotificationManager.IMPORTANCE_LOW))
-        val open = PendingIntent.getActivity(this, 0, Intent(this, AssistantEntryActivity::class.java).setAction(Intent.ACTION_ASSIST), PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
+        val activity = if (recordingSource == ru.bruce.dispatcherinbox.data.InboxSource.ASSISTANT) AssistantEntryActivity::class.java else ru.bruce.dispatcherinbox.MainActivity::class.java
+        val open = PendingIntent.getActivity(this, 0, Intent(this, activity).setAction(Intent.ACTION_ASSIST).putExtra("destination", "capture"), PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
         val stop = PendingIntent.getService(this, 1, Intent(this, RecordingService::class.java).setAction(STOP), PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
         val notification = NotificationCompat.Builder(this, CHANNEL)
             .setSmallIcon(R.drawable.ic_quick_capture_tile).setContentTitle("Catching · Идёт запись")
@@ -45,11 +46,13 @@ class RecordingService : Service() {
     companion object {
         private const val CHANNEL = "catching-recording"
         private const val STOP = "ru.bruce.dispatcherinbox.STOP_RECORDING"
+        private var recordingSource = ru.bruce.dispatcherinbox.data.InboxSource.MANUAL
         private var owner: Any? = null
         private var stopAction: (() -> Unit)? = null
-        @Synchronized fun begin(context: android.content.Context, token: Any, onStop: () -> Unit) {
+        @Synchronized fun begin(context: android.content.Context, token: Any, source: String, onStop: () -> Unit) {
             check(owner == null || owner === token) { "Другая запись уже идёт. Откройте её через уведомление" }
             owner = token
+            recordingSource = source
             stopAction = onStop
             try { ContextCompat.startForegroundService(context, Intent(context, RecordingService::class.java)) }
             catch (error: Exception) { owner = null; stopAction = null; throw error }
