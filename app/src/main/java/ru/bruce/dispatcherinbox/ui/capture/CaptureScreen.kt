@@ -149,7 +149,7 @@ fun CaptureScreen(
     val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
     LaunchedEffect(viewModel, compact, lifecycleOwner) {
         if (compact) lifecycleOwner.lifecycle.repeatOnLifecycle(androidx.lifecycle.Lifecycle.State.STARTED) {
-            viewModel.close.collect { onClose() }
+            viewModel.close.collect { kotlinx.coroutines.delay(500); onClose() }
         }
     }
 
@@ -191,7 +191,7 @@ fun CaptureScreen(
         Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             OutlinedButton(colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.onSurface), onClick = { textExpanded = !textExpanded }, enabled = !state.isBusy && !state.isRecording,
                 modifier = Modifier.weight(1f)) { Icon(if (compact && textExpanded) Icons.Default.Mic else Icons.Default.Keyboard, null, Modifier.size(18.dp)); Spacer(Modifier.width(6.dp)); Text(if (compact && textExpanded) "Голос" else "Текст") }
-            OutlinedButton(colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.onSurface), onClick = { filePicker.launch("*/*") }, enabled = !state.isBusy && !state.isRecording,
+            OutlinedButton(colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.onSurface), onClick = { filePicker.launch("*/*") }, enabled = !state.isBusy,
                 modifier = Modifier.weight(1f)) { Icon(Icons.Default.AttachFile, null, Modifier.size(18.dp)); Spacer(Modifier.width(6.dp)); Text("Файл") }
         }
         } else {
@@ -217,7 +217,7 @@ fun CaptureScreen(
                 ),
                 shape = RoundedCornerShape(20.dp),
                 border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-                onClick = { filePicker.launch("*/*") }, enabled = !state.isBusy && !state.isRecording,
+                onClick = { filePicker.launch("*/*") }, enabled = !state.isBusy,
                 modifier = Modifier.weight(1f).heightIn(min = 64.dp),
             ) {
                 Icon(Icons.Default.FolderOpen, null, Modifier.size(24.dp))
@@ -259,7 +259,14 @@ fun CaptureScreen(
             }
         }
 
-        state.statusMessage?.let { message ->
+        if (compact) {
+            Box(Modifier.fillMaxWidth().heightIn(min = 48.dp), contentAlignment = Alignment.Center) {
+                val message = if (state.localCommitted) "✓ Сохранено на телефоне · ${formatSize(state.savedOriginalBytes)}" else state.statusMessage.orEmpty()
+                Text(message, style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = if (state.localCommitted) FontWeight.Bold else FontWeight.Normal,
+                    color = if (state.isError) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface)
+            }
+        } else state.statusMessage?.let { message ->
             Text(message, modifier = Modifier.padding(vertical = 8.dp),
                 color = if (state.isError) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant)
         }
@@ -323,7 +330,7 @@ private fun FullscreenVoiceControl(state: CaptureUiState, shortScreen: Boolean, 
 @Composable
 private fun VoiceControl(state: CaptureUiState, compact: Boolean, onClick: () -> Unit) {
     val amplitude = if (state.isRecording) state.recordingAmplitude else 0f
-    val primary = MaterialTheme.colorScheme.onPrimaryContainer
+    val primary = ru.bruce.dispatcherinbox.ui.theme.CaptureAccent
     Column(Modifier.fillMaxWidth().padding(top = 8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
         Box(Modifier.size(if (compact) 132.dp else 156.dp).background(
             Brush.radialGradient(listOf(primary.copy(alpha = 0.10f + amplitude * 0.10f), Color.Transparent))),
@@ -332,10 +339,12 @@ private fun VoiceControl(state: CaptureUiState, compact: Boolean, onClick: () ->
                 modifier = Modifier.size(if (compact) 88.dp else 100.dp),
                 contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp),
                 border = BorderStroke(1.dp, primary.copy(alpha = 0.3f)),
-                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primaryContainer,
-                    contentColor = primary)) {
+                colors = ButtonDefaults.buttonColors(containerColor = Color.Transparent,
+                    contentColor = Color(0xFFF6EFFF))) {
+                Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color(0xFFAF86E1), Color(0xFF604086)))), contentAlignment = Alignment.Center) {
                 Icon(if (state.isRecording) Icons.Default.Stop else Icons.Default.Mic,
                     if (state.isRecording) "Остановить и сохранить" else "Начать запись", Modifier.size(34.dp))
+                }
             }
         }
         Text(if (state.isRecording) "%02d:%02d".format(state.recordingSeconds / 60, state.recordingSeconds % 60) else "Голос",

@@ -40,17 +40,20 @@ data class CaptureUiState(
     val isBusy: Boolean = false,
     val statusMessage: String? = null,
     val isError: Boolean = false,
+    val localCommitted: Boolean = false,
+    val savedOriginalBytes: Long = 0,
     val defaultOpenMode: String? = null,
     val recentItems: List<InboxItemWithAttachments> = emptyList(),
 )
 
-class CaptureViewModel(
-    application: Application,
+internal class CaptureSession(
+    private val application: Application,
     private val repository: InboxRepository,
     settingsRepository: SettingsRepository,
     private val source: String,
     amplitudeSource: (() -> Int)? = null,
-) : AndroidViewModel(application) {
+) {
+    private val sessionScope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + Dispatchers.Main.immediate)
     private val recorder = VoiceRecorder(application)
     // Подмена доступна только конструктору теста; штатная Factory всегда читает MediaRecorder.
     private val readAmplitude = amplitudeSource ?: recorder::currentAmplitude
@@ -59,7 +62,46 @@ class CaptureViewModel(
     private val localState = MutableStateFlow(CaptureUiState())
     private val committedId = MutableStateFlow<String?>(null)
     private var amplitudeJob: kotlinx.coroutines.Job? = null
+    private var captureId = java.util.UUID.randomUUID().toString()
+    private var stopAfterImport = false
+    private var rawVoicePath: String? = null
+    private val journal = android.util.AtomicFile(java.io.File(application.filesDir, "capture-$source.json"))
     private var lastSavedId: String? = null
+    val isCommitted get() = committedId.value != null && source == InboxSource.ASSISTANT
+
+    init { restoreDraft() }
+
+    private fun persistDraft(): Boolean = runCatching {
+        val json = org.json.JSONObject().put("captureId", captureId).put("text", localState.value.text).put("rawVoicePath", rawVoicePath)
+        json.put("attachments", org.json.JSONArray().apply { localState.value.attachments.forEach { d ->
+            put(org.json.JSONObject().put("id", d.id).put("path", d.localPath).put("name", d.originalName)
+                .put("mime", d.mimeType).put("size", d.sizeBytes).put("checksum", d.checksum))
+        } })
+        val stream = journal.startWrite()
+        try { stream.write(json.toString().toByteArray()); journal.finishWrite(stream) }
+        catch (error: Exception) { journal.failWrite(stream); throw error }
+    }.onFailure {
+        localState.value = localState.value.copy(isError = true, statusMessage = "Не удалось записать журнал черновика: ${it.message}")
+    }.isSuccess
+    private fun restoreDraft() {
+        if (!journal.baseFile.exists()) return
+        runCatching {
+            val json = journal.openRead().use { org.json.JSONObject(it.readBytes().toString(Charsets.UTF_8)) }
+            captureId = json.optString("captureId").ifBlank { captureId }
+            val a = json.getJSONArray("attachments")
+            val drafts = (0 until a.length()).map { i -> a.getJSONObject(i).let { d ->
+                AttachmentDraft(d.getString("id"), d.getString("path"), d.optString("mime").takeIf { it.isNotBlank() },
+                    d.optString("name").takeIf { it.isNotBlank() }, d.getLong("size"), d.optString("checksum").takeIf { it.isNotBlank() })
+            } }.toMutableList()
+            val path = json.optString("rawVoicePath").takeIf { it.isNotBlank() && it != "null" }
+            if (path != null && drafts.none { it.localPath == path }) {
+                val file = java.io.File(path)
+                if (file.exists()) drafts += AttachmentDraft(localPath = path, mimeType = "audio/mp4", originalName = file.name, sizeBytes = file.length(), checksum = null)
+            }
+            localState.value = localState.value.copy(text = json.optString("text"), attachments = drafts,
+                statusMessage = "Восстановлен локальный черновик. Проверьте состав и аудио перед сохранением", isError = path != null)
+        }.onFailure { localState.value = localState.value.copy(statusMessage = "Не удалось прочитать черновик. Исходные файлы сохранены", isError = true) }
+    }
 
     // StateFlow повторит commit новой Activity после конфигурационной смены/возврата в STARTED.
     val close = committedId.filterNotNull().filter { source == InboxSource.ASSISTANT }.map { Unit }
@@ -79,8 +121,8 @@ class CaptureViewModel(
             else -> local.statusMessage
         }
         local.copy(
-            statusMessage = syncMessage,
-            isError = (!waitingForDrive && saved?.item?.status == InboxStatus.ERROR) || local.isError,
+            statusMessage = if (local.localCommitted) "Сохранено на телефоне" else syncMessage,
+            isError = !local.localCommitted && ((!waitingForDrive && saved?.item?.status == InboxStatus.ERROR) || local.isError),
             driveConnected = settings.driveAccount.isNotBlank(),
             assistantOpenMode = settings.assistantOpenMode,
             autoStartAssistantRecording = settings.autoStartAssistantRecording,
@@ -88,14 +130,15 @@ class CaptureViewModel(
             recentItems = items.take(4),
         )
     }.stateIn(
-        viewModelScope,
+        sessionScope,
         SharingStarted.WhileSubscribed(5_000),
         CaptureUiState(),
     )
 
     fun setText(value: String) {
         if (value != localState.value.text) lastSavedId = null
-        localState.value = localState.value.copy(text = value, statusMessage = null, isError = false)
+        localState.value = localState.value.copy(text = value, statusMessage = null, isError = false, localCommitted = false)
+        persistDraft()
     }
 
     fun addAttachment(uri: Uri) {
@@ -106,7 +149,8 @@ class CaptureViewModel(
         val selectedUris = uris.distinct()
         if (selectedUris.isEmpty()) return
         lastSavedId = null
-        viewModelScope.launch {
+        localState.value = localState.value.copy(isBusy = true, localCommitted = false)
+        sessionScope.launch {
             localState.value = localState.value.copy(
                 isBusy = true,
                 statusMessage = if (selectedUris.size == 1) "Копируем файл…"
@@ -131,16 +175,19 @@ class CaptureViewModel(
                 },
                 isError = failedCount > 0,
             )
+            persistDraft()
+            if (stopAfterImport) { stopAfterImport = false; stopRecordingAndSave() }
         }
     }
 
     fun removeAttachment(draft: AttachmentDraft) {
-        viewModelScope.launch {
+        sessionScope.launch {
             repository.discardDraft(draft)
             localState.value = localState.value.copy(
                 attachments = localState.value.attachments - draft,
                 statusMessage = null,
             )
+            persistDraft()
         }
     }
 
@@ -148,10 +195,15 @@ class CaptureViewModel(
         if (localState.value.isRecording || localState.value.isBusy || committedId.value != null && source == InboxSource.ASSISTANT) return
         lastSavedId = null
         runCatching {
-            recorder.start(repository.newVoiceFile())
+            ru.bruce.dispatcherinbox.capture.RecordingService.begin(application, this, ::stopRecordingAndSave)
+            val voiceFile = repository.newVoiceFile()
+            rawVoicePath = voiceFile.absolutePath
+            check(persistDraft()) { "Не удалось защитить черновик. Освободите место и повторите" }
+            recorder.start(voiceFile)
             audioFeedback.playStartSound()
             levelMeter.reset()
             localState.value = localState.value.copy(
+                localCommitted = false,
                 isRecording = true,
                 recordingAmplitude = 0f,
                 recordingLevels = RecordingLevelMeter.emptyHistory(),
@@ -162,7 +214,7 @@ class CaptureViewModel(
 
             val started = android.os.SystemClock.elapsedRealtime()
             amplitudeJob?.cancel()
-            amplitudeJob = viewModelScope.launch {
+            amplitudeJob = sessionScope.launch {
                 while (localState.value.isRecording) {
                     val measured = levelMeter.sample(readAmplitude())
                     localState.value = localState.value.copy(
@@ -174,13 +226,15 @@ class CaptureViewModel(
                 }
             }
         }.onFailure {
+            ru.bruce.dispatcherinbox.capture.RecordingService.end(application, this)
             audioFeedback.playErrorSound()
-            showError("Не удалось начать запись")
+            showError(it.message ?: "Не удалось начать запись")
         }
     }
 
     fun stopRecordingAndSave() {
         if (!localState.value.isRecording) return
+        if (localState.value.isBusy) { stopAfterImport = true; return }
         amplitudeJob?.cancel()
         levelMeter.reset()
         localState.value = localState.value.copy(
@@ -189,13 +243,17 @@ class CaptureViewModel(
             recordingLevels = RecordingLevelMeter.emptyHistory(),
             isBusy = true,
         )
-        viewModelScope.launch {
+        sessionScope.launch {
             try {
                 val file = withContext(Dispatchers.IO) { recorder.stop() }
                 audioFeedback.playStopSound()
                 val voice = repository.voiceDraft(file)
-                saveInternal(localState.value.attachments + voice)
+                rawVoicePath = null
+                localState.value = localState.value.copy(attachments = localState.value.attachments + voice)
+                persistDraft()
+                saveInternal(localState.value.attachments)
             } catch (error: Exception) {
+                ru.bruce.dispatcherinbox.capture.RecordingService.end(application, this@CaptureSession)
                 audioFeedback.playErrorSound()
                 showError(error.message ?: "Не удалось сохранить запись")
             }
@@ -212,7 +270,7 @@ class CaptureViewModel(
         val drafts = localState.value.attachments
         // Синхронно закрываем окно повторного нажатия до запуска coroutine.
         localState.value = localState.value.copy(isBusy = true)
-        viewModelScope.launch { saveInternal(drafts) }
+        sessionScope.launch { saveInternal(drafts) }
     }
 
     private suspend fun saveInternal(drafts: List<AttachmentDraft>) {
@@ -228,13 +286,20 @@ class CaptureViewModel(
                 repository.save(text, drafts, source, onLocalCommit = { item ->
                     lastSavedId = item.id
                     localState.value = CaptureUiState(
-                        statusMessage = "На телефоне · В очереди",
+                        statusMessage = "Сохранено на телефоне",
+                        localCommitted = true,
+                        savedOriginalBytes = drafts.sumOf { it.sizeBytes },
                         defaultOpenMode = localState.value.defaultOpenMode,
                     )
+                    journal.delete()
+                    rawVoicePath = null
                     committedId.value = item.id
-                })
+                    ru.bruce.dispatcherinbox.capture.RecordingService.end(application, this@CaptureSession)
+                    captureId = java.util.UUID.randomUUID().toString()
+                }, captureId = captureId)
             }
         } catch (error: Exception) {
+            ru.bruce.dispatcherinbox.capture.RecordingService.end(application, this@CaptureSession)
             showError(error.message ?: "Не удалось сохранить запись")
         }
     }
@@ -252,12 +317,31 @@ class CaptureViewModel(
         )
     }
 
-    override fun onCleared() {
-        amplitudeJob?.cancel()
-        if (localState.value.isRecording) recorder.cancel()
-        super.onCleared()
-    }
+}
 
+class CaptureViewModel(
+    application: Application,
+    repository: InboxRepository,
+    settingsRepository: SettingsRepository,
+    source: String,
+    amplitudeSource: (() -> Int)? = null,
+) : AndroidViewModel(application) {
+    // Сервис удерживает сессию записи независимо от уничтожения Activity/ViewModel.
+    private val session = if (amplitudeSource != null) CaptureSession(application, repository, settingsRepository, source, amplitudeSource)
+        else synchronized(sessions) {
+            sessions[source]?.takeUnless { it.isCommitted } ?: CaptureSession(application, repository, settingsRepository, source).also { sessions[source] = it }
+        }
+    val state get() = session.state
+    val close get() = session.close
+    fun setText(value: String) = session.setText(value)
+    fun addAttachment(uri: Uri) = session.addAttachment(uri)
+    fun addAttachments(uris: List<Uri>) = session.addAttachments(uris)
+    fun removeAttachment(draft: AttachmentDraft) = session.removeAttachment(draft)
+    fun startRecording() = session.startRecording()
+    fun stopRecordingAndSave() = session.stopRecordingAndSave()
+    fun onAudioPermissionDenied() = session.onAudioPermissionDenied()
+    fun save() = session.save()
+    companion object { private val sessions = mutableMapOf<String, CaptureSession>() }
     class Factory(
         private val application: Application,
         private val repository: InboxRepository,

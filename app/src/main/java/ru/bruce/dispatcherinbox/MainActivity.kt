@@ -76,7 +76,7 @@ open class MainActivity : ComponentActivity() {
             statusBarStyle = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT),
             navigationBarStyle = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT),
         )
-        requestedRoute = if (savedInstanceState == null) intent.getStringExtra("destination")?.takeIf { it in setOf("capture", "settings") }.orEmpty() else ""
+        requestedRoute = if (savedInstanceState == null) intent.getStringExtra("destination")?.takeIf { it in setOf("capture", "queue", "settings") }.orEmpty() else ""
         val container = (application as DispatcherApplication).container
         setContent {
             DispatcherInboxTheme {
@@ -101,7 +101,7 @@ open class MainActivity : ComponentActivity() {
         super.onNewIntent(intent)
         setIntent(intent)
         navigationRequest++
-        requestedRoute = if (intent.getStringExtra("destination") == "settings") "settings" else "capture"
+        requestedRoute = intent.getStringExtra("destination")?.takeIf { it in setOf("capture", "queue", "settings") } ?: "capture"
     }
 
     private fun requestAssistantRole() {
