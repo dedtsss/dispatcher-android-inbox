@@ -10,13 +10,17 @@ import androidx.core.content.ContextCompat
 import ru.bruce.dispatcherinbox.R
 import ru.bruce.dispatcherinbox.assistant.AssistantEntryActivity
 
-/** Живёт только во время явно начатой пользователем записи. */
+/** Живёт только во время пользовательской диктовки и её локального сохранения. */
 class RecordingService : Service() {
+    private var sessionOwner: Any? = null
+    private var sessionGeneration = -1L
     private var wakeLock: PowerManager.WakeLock? = null
     override fun onBind(intent: Intent?): IBinder? = null
     @android.annotation.SuppressLint("WakelockTimeout") // Освобождается при завершении foreground-сервиса, без ограничения длины диктовки.
     override fun onCreate() {
         super.onCreate()
+        sessionOwner = owner
+        sessionGeneration = generation
         val manager = getSystemService(NotificationManager::class.java)
         manager.createNotificationChannel(NotificationChannel(CHANNEL, "Запись голоса", NotificationManager.IMPORTANCE_LOW))
         val activity = if (recordingSource == ru.bruce.dispatcherinbox.data.InboxSource.ASSISTANT) AssistantEntryActivity::class.java else ru.bruce.dispatcherinbox.MainActivity::class.java
@@ -36,9 +40,9 @@ class RecordingService : Service() {
         if (stopAction == null) stopSelf()
         return START_NOT_STICKY // Нельзя молча включать микрофон после смерти процесса.
     }
-    override fun onTaskRemoved(rootIntent: Intent?) { stopAction?.invoke() }
+    override fun onTaskRemoved(rootIntent: Intent?) { if (owner === sessionOwner && generation == sessionGeneration) stopAction?.invoke() }
     override fun onDestroy() {
-        stopAction?.invoke()
+        if (owner === sessionOwner && generation == sessionGeneration) stopAction?.invoke()
         wakeLock?.let { if (it.isHeld) it.release() }
         wakeLock = null
         super.onDestroy()
@@ -47,15 +51,29 @@ class RecordingService : Service() {
         private const val CHANNEL = "catching-recording"
         private const val STOP = "ru.bruce.dispatcherinbox.STOP_RECORDING"
         private var recordingSource = ru.bruce.dispatcherinbox.data.InboxSource.MANUAL
+        private var generation = 0L
         private var owner: Any? = null
         private var stopAction: (() -> Unit)? = null
         @Synchronized fun begin(context: android.content.Context, token: Any, source: String, onStop: () -> Unit) {
             check(owner == null || owner === token) { "Другая запись уже идёт. Откройте её через уведомление" }
+            generation++
             owner = token
             recordingSource = source
             stopAction = onStop
             try { ContextCompat.startForegroundService(context, Intent(context, RecordingService::class.java)) }
             catch (error: Exception) { owner = null; stopAction = null; throw error }
+        }
+        @Synchronized fun saving(context: android.content.Context, token: Any, waitingForPicker: Boolean) {
+            if (owner !== token) return
+            if (Build.VERSION.SDK_INT >= 33 && ContextCompat.checkSelfPermission(context, android.Manifest.permission.POST_NOTIFICATIONS) != android.content.pm.PackageManager.PERMISSION_GRANTED) return
+            val activity = if (recordingSource == ru.bruce.dispatcherinbox.data.InboxSource.ASSISTANT) AssistantEntryActivity::class.java else ru.bruce.dispatcherinbox.MainActivity::class.java
+            val open = PendingIntent.getActivity(context, 0, Intent(context, activity).setAction(Intent.ACTION_ASSIST).putExtra("destination", "capture"), PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
+            val notification = NotificationCompat.Builder(context, CHANNEL).setSmallIcon(R.drawable.ic_quick_capture_tile)
+                .setContentTitle("Catching · Микрофон остановлен")
+                .setContentText(if (waitingForPicker) "Завершите выбор файла для этой заметки" else "Сохраняем на телефоне…")
+                .setContentIntent(open).setOngoing(true).build()
+            // Разрешение уведомлений может быть отозвано; это не отменяет LOCAL commit.
+            runCatching { context.getSystemService(NotificationManager::class.java).notify(41, notification) }
         }
         @Synchronized fun end(context: android.content.Context, token: Any) {
             if (owner !== token) return

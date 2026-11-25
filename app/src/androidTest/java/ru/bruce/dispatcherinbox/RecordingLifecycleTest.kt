@@ -38,8 +38,10 @@ class RecordingLifecycleTest {
         ActivityScenario.launch<AssistantEntryActivity>(intent).use { scenario ->
             assertTrue(device.wait(Until.hasObject(By.desc("Начать запись")), 10000))
             scenario.onActivity { model = ViewModelProvider(it)[CaptureViewModel::class.java] }
+            device.waitForIdle()
             val idleTop = device.findObject(By.desc("Закрыть ассистент")).visibleBounds.top
             scenario.onActivity { model.startRecording() }
+            val recordingWindowStart = SystemClock.elapsedRealtime()
             assertTrue(device.wait(Until.hasObject(By.desc("Остановить и сохранить")), 10000))
             device.waitForIdle()
             val recordingTop = device.findObject(By.desc("Закрыть ассистент")).visibleBounds.top
@@ -75,6 +77,7 @@ class RecordingLifecycleTest {
             scenario.onActivity { model.addAttachment(Uri.parse("content://ru.bruce.dispatcherinbox.test.originals/original")) }
             withTimeout(10000) { model.state.first { it.isRecording && !it.isBusy && it.attachments.size == 1 } }
             assertTrue(device.takeScreenshot(File(dir, "lifecycle-recording-with-file.png")))
+            val recordingWindowStop = SystemClock.elapsedRealtime()
             scenario.onActivity { model.stopRecordingAndSave(); model.stopRecordingAndSave() }
             withTimeout(10000) { model.state.first { it.localCommitted } }
             val commitObserved = SystemClock.elapsedRealtime()
@@ -86,7 +89,7 @@ class RecordingLifecycleTest {
             assertTrue(saved.attachments.single { it.mimeType == "audio/mp4" }.sizeBytes > 0)
             val original = saved.attachments.single { it.mimeType != "audio/mp4" }
             assertArrayEquals(byteArrayOf(0, 1, -1, 10, 42), File(original.localPath).readBytes())
-            assertEquals(saved.attachments.sumOf { it.sizeBytes }, model.state.value.savedOriginalBytes)
+            assertEquals(saved.attachments.sumOf { it.sizeBytes } + (saved.item.text?.toByteArray(Charsets.UTF_8)?.size ?: 0), model.state.value.savedOriginalBytes)
             assertEquals("queued", saved.item.status)
             assertEquals(Lifecycle.State.RESUMED, scenario.state)
             assertTrue("LOCAL commit выдан за Drive", model.state.value.statusMessage == "Сохранено на телефоне")
@@ -97,10 +100,20 @@ class RecordingLifecycleTest {
             assertTrue("Подтверждение исчезло раньше короткого интервала", closeDelay >= 350)
             assertEquals(Lifecycle.State.DESTROYED, scenario.state)
             assertEquals(1, container.dao.observeAll().first().count { it.item.text == marker })
+            val voice = saved.attachments.single { it.mimeType == "audio/mp4" }
+            val retriever = android.media.MediaMetadataRetriever()
+            val recordedMillis = try {
+                retriever.setDataSource(voice.localPath)
+                checkNotNull(retriever.extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_DURATION)).toLong()
+            } finally { retriever.release() }
+            val wallWindowMillis = recordingWindowStop - recordingWindowStart
+            assertTrue("M4A не содержит полный интервал записи, включая выключенный экран: audio=$recordedMillis wall=$wallWindowMillis",
+                kotlin.math.abs(recordedMillis - wallWindowMillis) <= 700)
             File(dir, "lifecycle-measurements.txt").writeText(
                 "Источник: Android AVD, не физический телефон и не защищённая PIN-блокировка.\n" +
                 "idleHeaderTopPx=$idleTop recordingHeaderTopPx=$recordingTop\n" +
                 "Экран выключен 1500мс; запись продолжилась после recreate/background.\n" +
+                "m4aDurationMs=$recordedMillis wallRecordingWindowMs=$wallWindowMillis toleranceMs=700\n" +
                 "localCommitObservedToClosedMs=$closeDelay originals=${saved.attachments.size} originalBytes=${saved.attachments.sumOf { it.sizeBytes }}\n" +
                 "Один LOCAL commit, status=queued; загрузка в настоящий Drive не проверялась.\n")
         }

@@ -134,7 +134,7 @@ fun CaptureScreen(
         if (!requestedAutoStart && state.defaultOpenMode != null && state.assistantOpenMode != null) {
             requestedAutoStart = true
             val mode = CaptureEntryPolicy.mode(compact, state.defaultOpenMode!!, state.assistantOpenMode!!, forceVoiceStart)
-            textExpanded = mode == "text" && compact
+            textExpanded = mode == "text" && compact && !state.isRecording
             if (CaptureEntryPolicy.autoRecord(compact, mode, state.autoStartAssistantRecording, forceVoiceStart)) startWithPermission()
         }
     }

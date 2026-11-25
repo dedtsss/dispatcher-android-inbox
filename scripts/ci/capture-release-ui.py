@@ -13,7 +13,7 @@ assert os.environ.get('GITHUB_ACTIONS') == 'true'
 assert os.environ.get('GITHUB_REPOSITORY') == 'dedtsss/dispatcher-android-inbox'
 OUT = Path('visual')
 PKG = 'ru.bruce.dispatcherinbox'
-APK = Path('release/catching-0.6.12-release.apk')
+APK = Path('release/catching-0.6.13-release.apk')
 BASE = Path(os.environ['CATCHING_VISUAL_BASELINE'])
 
 

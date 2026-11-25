@@ -154,7 +154,6 @@ internal class CaptureSession(
         val selectedUris = uris.distinct()
         if (selectedUris.isEmpty()) { fileSelection?.complete(Unit); return }
         lastSavedId = null
-        captureId = java.util.UUID.randomUUID().toString()
         localState.value = localState.value.copy(isBusy = true, localCommitted = false)
         attachmentImportJob = sessionScope.launch {
             localState.value = localState.value.copy(
@@ -181,6 +180,7 @@ internal class CaptureSession(
                 },
                 isError = failedCount > 0,
             )
+            if (added.isNotEmpty()) captureId = java.util.UUID.randomUUID().toString()
             attachmentImportFailed = failedCount > 0
             persistDraft()
 
@@ -256,11 +256,13 @@ internal class CaptureSession(
         sessionScope.launch {
             try {
                 val file = withContext(Dispatchers.IO) { recorder.stop() }
+                ru.bruce.dispatcherinbox.capture.RecordingService.saving(application, this@CaptureSession, fileSelection?.isCompleted == false)
                 audioFeedback.playStopSound()
                 val voice = repository.voiceDraft(file)
                 rawVoicePath = null
                 localState.value = localState.value.copy(attachments = localState.value.attachments + voice)
                 persistDraft()
+                if (fileSelection?.isCompleted == false) localState.value = localState.value.copy(statusMessage = "Микрофон остановлен. Завершите выбор файла для заметки")
                 fileSelection?.await()
                 attachmentImportJob?.join()
                 check(!attachmentImportFailed) { "Аудио сохранено в черновике. Не все выбранные файлы добавлены: повторите выбор файла или сохраните доступный состав" }
@@ -309,7 +311,7 @@ internal class CaptureSession(
                     localState.value = CaptureUiState(
                         statusMessage = "Сохранено на телефоне",
                         localCommitted = true,
-                        savedOriginalBytes = drafts.sumOf { it.sizeBytes },
+                        savedOriginalBytes = drafts.sumOf { it.sizeBytes } + (item.text?.toByteArray(Charsets.UTF_8)?.size ?: 0),
                         defaultOpenMode = localState.value.defaultOpenMode,
                     )
                     attachmentImportFailed = false
