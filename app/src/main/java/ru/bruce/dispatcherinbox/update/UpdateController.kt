@@ -199,7 +199,7 @@ class UpdateController(context: Context) {
         } catch (e: Exception) { failed(e) }
     } }
 
-    private fun failed(e: Exception) = withCheckResult(UpdateState(UpdateStatus.FAILED, e.message ?: "Ошибка обновления",
+    private fun failed(e: Throwable) = withCheckResult(UpdateState(UpdateStatus.FAILED, e.message ?: "Ошибка обновления",
         canDownload = runCatching { manifest()?.versionCode?.let { it > installed().versionCode } == true }.getOrDefault(false)))
 }
 

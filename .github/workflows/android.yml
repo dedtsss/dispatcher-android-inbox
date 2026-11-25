@@ -177,9 +177,12 @@ jobs:
       - name: Уплотнить выпуск без изменения проверенного подписанного APK
         if: steps.android-qa.outcome == 'success'
         run: |
-          cd release
-          sha256sum catching-0.6.12-unsigned.apk > unsigned-SHA256.txt
-          sha256sum catching-0.6.12-release.apk catching-0.6.12-unsigned.apk > SHA256SUMS
+          mkdir -p unsigned-release
+          mv release/catching-0.6.12-unsigned.apk unsigned-release/
+          cp release/source-head.txt unsigned-release/
+          (cd unsigned-release && sha256sum catching-0.6.12-unsigned.apk > SHA256SUMS)
+          cp unsigned-release/SHA256SUMS release/unsigned-SHA256.txt
+          (cd release && sha256sum catching-0.6.12-release.apk > SHA256SUMS)
       - name: Проверить бюджет перед публикацией подписанного release APK
         id: release-artifact-budget
         if: (github.event_name == 'push' || inputs.publish_release_artifact) && steps.android-qa.outcome == 'success'
@@ -194,6 +197,22 @@ jobs:
         with:
           name: catching-0.6.12-release
           path: release/
+          if-no-files-found: error
+          retention-days: 30
+      - name: Проверить бюджет точного unsigned APK для host-маршрута
+        id: unsigned-artifact-budget
+        if: (github.event_name == 'push' || inputs.publish_release_artifact) && steps.android-qa.outcome == 'success'
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ACTIONS_ARTIFACT_BUDGET_BYTES: '280000000'
+        run: python3 scripts/ci/check_artifact_budget.py unsigned-release/
+      - name: Сохранить точный unsigned APK без пересборки
+        if: (github.event_name == 'push' || inputs.publish_release_artifact) && steps.android-qa.outcome == 'success' && steps.unsigned-artifact-budget.outcome == 'success'
+        uses: actions/upload-artifact@v4
+        with:
+          name: catching-0.6.12-unsigned
+          path: unsigned-release/
           if-no-files-found: error
           retention-days: 30
       - name: Собрать компактные доказательства оформления
