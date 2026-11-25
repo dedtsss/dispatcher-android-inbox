@@ -5,6 +5,11 @@ on:
     branches: [issue-7-drive-inbox]
   workflow_dispatch:
     inputs:
+      diagnostic_run_id:
+        description: Только извлечь ошибки прежнего CI в аннотации, без сборки
+        required: false
+        default: ""
+        type: string
       visual_apk_run_id:
         description: Только снимки точного release APK из успешного CI, без компиляции
         required: false
@@ -37,7 +42,7 @@ permissions:
 
 jobs:
   build-and-device:
-    if: inputs.apk_run_id == '' && inputs.visual_apk_run_id == ''
+    if: inputs.apk_run_id == '' && inputs.visual_apk_run_id == '' && inputs.diagnostic_run_id == ''
     name: Тесты, подписанный release APK и Android device QA
     runs-on: ubuntu-latest
     steps:
@@ -465,3 +470,27 @@ jobs:
           name: снимки-release-0.6.12
           path: visual/
           retention-days: 1
+
+  diagnostic:
+    if: inputs.diagnostic_run_id != ''
+    name: Диагностика прежнего CI без пересборки
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Извлечь точные ошибки из журнала
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_RUN: ${{ inputs.diagnostic_run_id }}
+        run: |
+          [[ "$SOURCE_RUN" =~ ^[0-9]+$ ]]
+          gh run view "$SOURCE_RUN" --repo "$GITHUB_REPOSITORY" --log-failed > failed.txt
+          python3 - <<'PYTHON'
+          import re
+          from pathlib import Path
+          lines = [line for line in Path('failed.txt').read_text().splitlines() if re.search(r'(e: |error:|FAILED|What went wrong|Caused by:|AssertionError|Exception:)', line)]
+          for line in lines[:20]:
+              line = line.replace('%', '%25').replace('\r', '%0D').replace('\n', '%0A')
+              print('::notice title=Ошибка исходного запуска::' + line)
+          with open(__import__('os').environ['GITHUB_STEP_SUMMARY'], 'a') as out:
+              out.write('Ошибки прежнего CI, без повторной сборки:\n\n```text\n' + '\n'.join(lines[:40]) + '\n```\n')
+          PYTHON
