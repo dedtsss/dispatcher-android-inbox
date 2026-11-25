@@ -1,7 +1,9 @@
 package ru.bruce.dispatcherinbox
 
 import android.content.Context
+import android.os.SystemClock
 import androidx.test.platform.app.InstrumentationRegistry
+import androidx.test.uiautomator.UiDevice
 import androidx.work.WorkInfo
 import androidx.work.WorkManager
 import kotlinx.coroutines.flow.first
@@ -21,8 +23,22 @@ class WorkRebootRecoveryTest {
     private val prefs get() = context.getSharedPreferences("reboot-recovery-fixture", Context.MODE_PRIVATE)
     private val evidence get() = File(context.getExternalFilesDir(null), "catching-evidence").apply { mkdirs() }
 
+    private fun awaitOffline() {
+        val device = UiDevice.getInstance(InstrumentationRegistry.getInstrumentation())
+        device.executeShellCommand("svc wifi disable")
+        device.executeShellCommand("svc data disable")
+        val connectivity = context.getSystemService(android.net.ConnectivityManager::class.java)
+        val deadline = SystemClock.elapsedRealtime() + 30_000
+        while (connectivity.activeNetwork != null && SystemClock.elapsedRealtime() < deadline) {
+            SystemClock.sleep(250)
+        }
+        assertNull("Сценарий должен начаться без сети", connectivity.activeNetwork)
+    }
+
     @Test fun seedBeforeReboot() = runBlocking<Unit> {
-        assertNull("Сценарий должен начаться без сети", context.getSystemService(android.net.ConnectivityManager::class.java).activeNetwork)
+        // Другой instrumentation-тест мог включить Wi-Fi; гарантируем реальный офлайн
+        // непосредственно перед созданием записи и automatic WorkManager work.
+        awaitOffline()
         container.settingsRepository.setDriveAccount("")
         container.settingsRepository.setAutoSync(true)
         container.settingsRepository.setWifiOnly(false)
