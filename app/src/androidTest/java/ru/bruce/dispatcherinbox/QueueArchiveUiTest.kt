@@ -6,8 +6,6 @@ import androidx.test.core.app.ActivityScenario
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.uiautomator.By
 import androidx.test.uiautomator.UiDevice
-import androidx.test.uiautomator.UiScrollable
-import androidx.test.uiautomator.UiSelector
 import androidx.test.uiautomator.Until
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.flow.first
@@ -34,15 +32,16 @@ class QueueArchiveUiTest {
         val existingArchivedCount = existing.count { it.item.archivedAt != null }
         val sentCount = existingConfirmed.size + 1
         val archiveCountAfterCleanup = existingArchivedCount + sentCount
+        val queueTestStart = now + 86_400_000L
         val entries = listOf(
-            Triple("sent", InboxStatus.SYNCED, now + 4),
+            Triple("sent", InboxStatus.SYNCED, queueTestStart + 4),
             Triple("waiting", InboxStatus.QUEUED, null),
             Triple("uploading", InboxStatus.SYNCING, null),
             Triple("failed", InboxStatus.ERROR, null),
         ).mapIndexed { index, (label, status, syncedAt) ->
             InboxItemEntity(
                 id = "$prefix-$label", type = InboxType.TEXT, text = "$prefix-$label",
-                createdAt = now + index, updatedAt = now + index, status = status,
+                createdAt = queueTestStart + index, updatedAt = queueTestStart + index, status = status,
                 source = InboxSource.MANUAL, retryCount = 0, lastError = null,
                 remoteId = if (syncedAt != null) "confirmed-$prefix" else null, syncedAt = syncedAt,
             )
@@ -51,12 +50,12 @@ class QueueArchiveUiTest {
         val imageId = "$prefix-image"
         val documentId = "$prefix-document"
         container.dao.insertItemWithAttachments(
-            InboxItemEntity(imageId, InboxType.IMAGE, null, now + 10, now + 10, InboxStatus.QUEUED,
+            InboxItemEntity(imageId, InboxType.IMAGE, null, queueTestStart - 10, queueTestStart - 10, InboxStatus.QUEUED,
                 InboxSource.MANUAL, 0, null, null),
             listOf(ru.bruce.dispatcherinbox.data.InboxAttachmentEntity("$imageId-a", imageId, "/synthetic/not-a-file.pdf", "image/png", "not-a-file.pdf", 10, null)),
         )
         container.dao.insertItemWithAttachments(
-            InboxItemEntity(documentId, InboxType.DOCUMENT, null, now + 11, now + 11, InboxStatus.QUEUED,
+            InboxItemEntity(documentId, InboxType.DOCUMENT, null, queueTestStart - 11, queueTestStart - 11, InboxStatus.QUEUED,
                 InboxSource.MANUAL, 0, null, null),
             listOf(ru.bruce.dispatcherinbox.data.InboxAttachmentEntity("$documentId-a", documentId, "/synthetic/not-an-image.jpg", "application/pdf", "not-an-image.jpg", 10, null)),
         )
@@ -65,18 +64,34 @@ class QueueArchiveUiTest {
                 assertTrue(device.wait(Until.hasObject(By.text("Очередь")), 10000))
                 device.findObjects(By.text("Очередь")).last().click()
                 assertTrue(device.wait(Until.hasObject(By.text("Очистить отправленные ($sentCount)")), 10000))
-                val queueList = UiScrollable(UiSelector().scrollable(true))
                 fun assertVisibleStatus(marker: String, status: String) {
+                    for (attempt in 0 until 8) {
+                        if (device.hasObject(By.descContains("$marker. $status"))) break
+                        device.swipe(device.displayWidth / 2, device.displayHeight * 4 / 5,
+                            device.displayWidth / 2, device.displayHeight / 3, 24)
+                        device.waitForIdle()
+                    }
                     assertTrue("Не найдена синтетическая запись $marker",
-                        queueList.scrollIntoView(UiSelector().descriptionContains(marker)))
+                        device.hasObject(By.descContains("$marker. $status")))
                     assertTrue("Для $marker не показан статус $status",
                         device.wait(Until.hasObject(By.descContains("$marker. $status")), 3000))
                 }
-                assertVisibleStatus("$prefix-sent", "Отправлено")
-                assertVisibleStatus("$prefix-waiting", "На телефоне · В очереди")
-                assertVisibleStatus("$prefix-uploading", "Отправляется")
                 assertVisibleStatus("$prefix-failed", "Ошибка загрузки")
+                assertVisibleStatus("$prefix-uploading", "Отправляется")
+                assertVisibleStatus("$prefix-waiting", "На телефоне · В очереди")
+                assertVisibleStatus("$prefix-sent", "Отправлено")
+                fun scrollToDescription(description: String) {
+                    for (attempt in 0 until 8) {
+                        if (device.hasObject(By.descContains(description))) break
+                        device.swipe(device.displayWidth / 2, device.displayHeight * 4 / 5,
+                            device.displayWidth / 2, device.displayHeight / 3, 24)
+                        device.waitForIdle()
+                    }
+                    assertTrue("Не найдено описание типа $description", device.hasObject(By.descContains(description)))
+                }
+                scrollToDescription("not-a-file.pdf")
                 assertTrue("Изображение классифицировано по расширению, а не MIME", device.hasObject(By.descContains("Тип: фотография")))
+                scrollToDescription("not-an-image.jpg")
                 assertTrue("Документ классифицирован как изображение по расширению", device.hasObject(By.descContains("Тип: документ")))
                 val evidence = File(context.getExternalFilesDir(null), "catching-evidence").apply { mkdirs() }
                 assertTrue(device.takeScreenshot(File(evidence, "queue-types-and-delivery-status.png")))

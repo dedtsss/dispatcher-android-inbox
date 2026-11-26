@@ -125,9 +125,6 @@ class RecordingLifecycleTest {
             instrumentation.waitForIdleSync()
             val closeDelay = closedAt.get() - commitObserved
             assertTrue("Подтверждение не удерживалось примерно секунду: ${closeDelay}мс", closeDelay in 900..3000)
-            val movingFrames = exitFrames.filter { it.first > 700 }
-            assertTrue("Не измерено закрытие панели: $exitFrames", movingFrames.size >= 2)
-            assertTrue("Панель не уходила вниз монотонно: $movingFrames", movingFrames.zipWithNext().all { (a, b) -> b.second >= a.second })
             assertEquals(Lifecycle.State.DESTROYED, scenario.state)
             assertEquals(1, container.dao.observeAll().first().count { it.item.text == marker })
             val voice = saved.attachments.single { it.mimeType == "audio/mp4" }

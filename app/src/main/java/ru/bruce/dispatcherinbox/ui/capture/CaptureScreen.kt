@@ -207,7 +207,8 @@ fun CaptureScreen(
                 shape = RoundedCornerShape(20.dp),
                 border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
                 onClick = { textExpanded = !textExpanded }, enabled = !state.isBusy && !state.localCommitted,
-                modifier = Modifier.weight(1f).heightIn(min = 64.dp),
+                modifier = Modifier.weight(1f).heightIn(min = 64.dp)
+                    .semantics { contentDescription = if (textExpanded) "Свернуть поле текста" else "Добавить текст" },
             ) {
                 Icon(Icons.Default.Description, null, Modifier.size(24.dp))
                 Spacer(Modifier.width(10.dp))

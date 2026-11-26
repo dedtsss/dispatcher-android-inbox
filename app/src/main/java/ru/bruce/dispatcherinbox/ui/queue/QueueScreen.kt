@@ -122,13 +122,23 @@ private fun QueueCard(
     val summary = item.text?.takeIf { it.isNotBlank() }
         ?: entry.attachments.firstOrNull()?.originalName?.takeIf { it.isNotBlank() }
         ?: typeLabel(entry)
+    val typeDescriptions = queueTypeCodes(entry).take(3).map { type ->
+        when (type) {
+            "voice" -> "Тип: голосовая запись"
+            "text" -> "Тип: текстовая запись"
+            "image" -> "Тип: фотография"
+            "video" -> "Тип: видео"
+            "document" -> "Тип: документ"
+            else -> "Тип: файл"
+        }
+    }
     val totalBytes = entry.attachments.sumOf { it.sizeBytes.coerceAtLeast(0) } + (item.text?.toByteArray(Charsets.UTF_8)?.size ?: 0)
     Card(shape = RoundedCornerShape(14.dp), modifier = Modifier.fillMaxWidth()) {
         Column {
             Column(
                 Modifier.fillMaxWidth().heightIn(min = 80.dp)
                     .semantics {
-                        contentDescription = "${typeLabel(entry)}. $summary. " +
+                        contentDescription = "${typeDescriptions.joinToString()}. $summary. " +
                             (if (archived) "В архиве · " else "") + delivery.label
                     }
                     .clickable(role = Role.Button, onClickLabel = if (expanded) "Свернуть запись" else "Подробности записи") { expanded = !expanded }
@@ -230,21 +240,7 @@ private fun typeLabel(entry: InboxItemWithAttachments): String =
 
 @Composable
 private fun QueueTypeIcons(entry: InboxItemWithAttachments, modifier: Modifier = Modifier) {
-    val item = entry.item
-    val types = buildSet {
-        if (!item.text.isNullOrBlank()) add("text")
-        entry.attachments.forEach { attachment ->
-            val mime = attachment.mimeType.orEmpty().lowercase()
-            add(when {
-                mime.startsWith("audio/") -> "voice"
-                mime.startsWith("image/") -> "image"
-                mime.startsWith("video/") -> "video"
-                mime.isNotBlank() -> "document"
-                else -> "file"
-            })
-        }
-        if (isEmpty()) add(item.type)
-    }.take(3)
+    val types = queueTypeCodes(entry).take(3)
     Row(modifier, horizontalArrangement = Arrangement.spacedBy(2.dp), verticalAlignment = Alignment.CenterVertically) {
         types.forEach { type ->
             val icon = when (type) {
@@ -266,6 +262,21 @@ private fun QueueTypeIcons(entry: InboxItemWithAttachments, modifier: Modifier =
             Icon(icon, contentDescription = description, modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
+}
+
+private fun queueTypeCodes(entry: InboxItemWithAttachments): Set<String> = buildSet {
+    if (!entry.item.text.isNullOrBlank()) add("text")
+    entry.attachments.forEach { attachment ->
+        val mime = attachment.mimeType.orEmpty().lowercase()
+        add(when {
+            mime.startsWith("audio/") -> "voice"
+            mime.startsWith("image/") -> "image"
+            mime.startsWith("video/") -> "video"
+            mime.isNotBlank() -> "document"
+            else -> "file"
+        })
+    }
+    if (isEmpty()) add(entry.item.type)
 }
 
 private fun formatTime(timestamp: Long): String = DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm")
