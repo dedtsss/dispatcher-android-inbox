@@ -34,6 +34,7 @@ class AttachmentStore(private val context: Context) {
                         output.write(buffer, 0, count)
                         digest.update(buffer, 0, count)
                     }
+                    output.fd.sync()
                 }
             } ?: error("Не удалось открыть выбранный файл")
         } catch (error: Exception) {
@@ -69,11 +70,11 @@ class AttachmentStore(private val context: Context) {
             val targetDir = File(itemsDir, itemId).apply { mkdirs() }
             val fileName = "${draft.id}-${sanitizeFileName(draft.originalName ?: source.name)}"
             val target = File(targetDir, fileName)
-            if (!source.renameTo(target)) {
-                FileInputStream(source).use { input ->
-                    FileOutputStream(target).use(input::copyTo)
+            FileInputStream(source).use { input ->
+                FileOutputStream(target).use { output ->
+                    input.copyTo(output)
+                    output.fd.sync()
                 }
-                source.delete()
             }
             InboxAttachmentEntity(
                 id = draft.id,
@@ -97,6 +98,21 @@ class AttachmentStore(private val context: Context) {
                 directory?.takeIf { it.isDirectory && it.listFiles().isNullOrEmpty() }?.delete()
             }
         }
+
+    suspend fun deleteConfirmedOriginals(entry: InboxItemWithAttachments) = withContext(Dispatchers.IO) {
+        val directory = File(itemsDir, entry.item.id).canonicalFile
+        val root = itemsDir.canonicalFile
+        require(directory.parentFile == root) { "Недопустимый каталог оригиналов" }
+        val files = entry.attachments.map { attachment ->
+            File(attachment.localPath).canonicalFile.also {
+                require(it.parentFile == directory) { "Оригинал вне каталога события; очистка отменена" }
+            }
+        }
+        // При частичном сбое метаданные не отмечаются очищенными. Повтор удалит
+        // оставшиеся файлы; удалённые байты уже подтверждены полным успехом Drive.
+        files.forEach { require(!it.exists() || it.delete()) { "Не удалось очистить локальную копию" } }
+        if (directory.listFiles().isNullOrEmpty()) directory.delete()
+    }
 
     fun newVoiceFile(): File {
         stagingDir.mkdirs()

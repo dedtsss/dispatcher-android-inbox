@@ -10,7 +10,8 @@ import kotlinx.coroutines.launch
 import ru.bruce.dispatcherinbox.data.InboxItemWithAttachments
 import ru.bruce.dispatcherinbox.data.InboxRepository
 
-class QueueViewModel(private val repository: InboxRepository) : ViewModel() {
+class QueueViewModel(private val repository: InboxRepository, settingsRepository: ru.bruce.dispatcherinbox.data.SettingsRepository) : ViewModel() {
+    val settings = settingsRepository.settings.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), ru.bruce.dispatcherinbox.data.AppSettings())
     val items: StateFlow<List<InboxItemWithAttachments>> = repository.items.stateIn(
         viewModelScope,
         SharingStarted.WhileSubscribed(5_000),
@@ -19,9 +20,11 @@ class QueueViewModel(private val repository: InboxRepository) : ViewModel() {
 
     fun retry(id: String) = viewModelScope.launch { repository.retry(id) }
     fun delete(id: String) = viewModelScope.launch { repository.delete(id) }
+    fun archiveConfirmed() = viewModelScope.launch { repository.archiveConfirmed() }
+    fun restoreArchived(id: String) = viewModelScope.launch { repository.restoreArchived(id) }
 
-    class Factory(private val repository: InboxRepository) : ViewModelProvider.Factory {
+    class Factory(private val repository: InboxRepository, private val settingsRepository: ru.bruce.dispatcherinbox.data.SettingsRepository) : ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST")
-        override fun <T : ViewModel> create(modelClass: Class<T>): T = QueueViewModel(repository) as T
+        override fun <T : ViewModel> create(modelClass: Class<T>): T = QueueViewModel(repository, settingsRepository) as T
     }
 }

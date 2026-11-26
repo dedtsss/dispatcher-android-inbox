@@ -1,0 +1,17 @@
+Verifies
+Verified using v1 scheme (JAR signing): false
+Verified using v2 scheme (APK Signature Scheme v2): true
+Verified using v3 scheme (APK Signature Scheme v3): true
+Verified using v3.1 scheme (APK Signature Scheme v3.1): false
+Verified using v4 scheme (APK Signature Scheme v4): false
+Verified for SourceStamp: false
+Number of signers: 1
+Signer #1 certificate DN: CN=Dispatcher Bruce, OU=Android, O=Bruce, C=RU
+Signer #1 certificate SHA-256 digest: 873bc4580e6d0387a37a155f5c6a6adba71d10408f53fd9d1e8834d54045a645
+Signer #1 certificate SHA-1 digest: a6c7d7850c8050a4b15175ed34a17b7ed8809811
+Signer #1 certificate MD5 digest: 48261a59f6919e0e6974b9f76309ae64
+Signer #1 key algorithm: RSA
+Signer #1 key size (bits): 4096
+Signer #1 public key SHA-256 digest: f7101fd3ac0a856d9652343f12ab6d09650812ed51eb4141286d437966fe6bda
+Signer #1 public key SHA-1 digest: d098f0268413ed0eb10532e992a834a53a0a8874
+Signer #1 public key MD5 digest: 57974aa54546d07610ffe15f7c3b54f8

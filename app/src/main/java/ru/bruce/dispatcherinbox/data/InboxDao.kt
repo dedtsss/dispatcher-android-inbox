@@ -8,6 +8,12 @@ import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface InboxDao {
+    @Query("SELECT remoteId FROM drive_checkpoints WHERE `key` = :key")
+    suspend fun driveId(key: String): String?
+
+    @Insert(onConflict = androidx.room.OnConflictStrategy.REPLACE)
+    suspend fun putDriveId(checkpoint: ru.bruce.dispatcherinbox.drive.DriveCheckpoint)
+
     @Insert
     suspend fun insertItem(item: InboxItemEntity)
 
@@ -26,6 +32,12 @@ interface InboxDao {
     @Transaction
     @Query("SELECT * FROM inbox_items ORDER BY createdAt DESC")
     fun observeAll(): Flow<List<InboxItemWithAttachments>>
+
+    @Query("UPDATE inbox_items SET archivedAt = :at, updatedAt = :at WHERE status = 'synced' AND syncedAt IS NOT NULL AND archivedAt IS NULL")
+    suspend fun archiveAllConfirmed(at: Long): Int
+
+    @Query("UPDATE inbox_items SET archivedAt = NULL, updatedAt = :at WHERE id = :id AND status = 'synced' AND archivedAt IS NOT NULL")
+    suspend fun restoreArchived(id: String, at: Long): Int
 
     @Transaction
     @Query("SELECT * FROM inbox_items WHERE status IN ('queued', 'error') ORDER BY createdAt ASC")
@@ -57,6 +69,19 @@ interface InboxDao {
 
     @Query("UPDATE inbox_items SET status = 'error', lastError = :message WHERE status = 'syncing'")
     suspend fun recoverInterruptedSyncs(message: String)
+
+    @Query("UPDATE inbox_items SET lastAttemptAt = :at, status = 'syncing', updatedAt = :at, lastError = NULL WHERE id = :id AND status IN ('queued', 'error')")
+    suspend fun startAttempt(id: String, at: Long)
+
+    @Query("UPDATE inbox_items SET status = 'synced', updatedAt = :at, syncedAt = :at, remoteId = :remoteId, lastError = NULL WHERE id = :id")
+    suspend fun confirmFullUpload(id: String, at: Long, remoteId: String)
+
+    @Transaction
+    @Query("SELECT * FROM inbox_items WHERE status = 'synced' AND syncedAt IS NOT NULL AND originalsDeletedAt IS NULL")
+    suspend fun getConfirmedForCleanup(): List<InboxItemWithAttachments>
+
+    @Query("UPDATE inbox_items SET originalsDeletedAt = :at WHERE id = :id AND status = 'synced' AND syncedAt IS NOT NULL")
+    suspend fun markOriginalsDeleted(id: String, at: Long)
 
     @Query("DELETE FROM inbox_items WHERE id = :id")
     suspend fun deleteById(id: String)

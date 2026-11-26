@@ -1,0 +1,7 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <application>
+        <activity android:name=".LevelMeterTestActivity" android:exported="false" />
+        <provider android:name=".TestOriginalProvider"
+            android:authorities="ru.bruce.dispatcherinbox.test.originals" android:exported="false" />
+    </application>
+</manifest>

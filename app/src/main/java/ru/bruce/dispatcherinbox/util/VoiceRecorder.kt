@@ -43,8 +43,7 @@ class VoiceRecorder(private val context: Context) {
         try {
             activeRecorder.stop()
         } catch (error: RuntimeException) {
-            file.delete()
-            throw IllegalStateException("Не удалось сохранить аудиозапись", error)
+            throw IllegalStateException("Не удалось завершить аудиозапись. Исходный файл сохранён в черновике", error)
         } finally {
             activeRecorder.release()
         }

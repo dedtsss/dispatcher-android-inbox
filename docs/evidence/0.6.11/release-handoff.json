@@ -1,0 +1,22 @@
+{
+  "state": "PREPARED_HOST_RELEASE_PENDING",
+  "repository": "dedtsss/dispatcher-android-inbox",
+  "issue": 7,
+  "pr": 8,
+  "run": 43210613673,
+  "source_head": "00bf12023a66ed672f4e7bdf2f15ab703a121804",
+  "artifact_id": 13941737158,
+  "artifact_digest": "sha256:2a93575f9ccee29d3d67468786efae3eeba37c4f094bfb59d949b27829528178",
+  "apk_name": "catching-0.6.11-release.apk",
+  "apk_sha256": "4dde0d3deed2ee8f132af8bbd2810f6716e0c5e2480b98332e54f10dd465ae88",
+  "package": "ru.bruce.dispatcherinbox",
+  "version_name": "0.6.11",
+  "version_code": 17,
+  "signer_sha256": "873bc4580e6d0387a37a155f5c6a6adba71d10408f53fd9d1e8834d54045a645",
+  "intended_channel": "preliminary",
+  "publish_latest": false,
+  "change_updater": false,
+  "merge_pr": false,
+  "host_helper_available_in_worker": false,
+  "physical_acceptance": false
+}

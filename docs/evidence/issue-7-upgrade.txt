@@ -1,0 +1,81 @@
+Проверка: CI 41496176021; APK из сборочного job CI 41492111746.
+История v1:
+
+ru.bruce.dispatcherinbox.HistoricalSeedTest:.
+
+Time: 0.129
+
+OK (1 test)
+
+
+
+ru.bruce.dispatcherinbox.MigrationTest:.
+
+Time: 0.017
+
+OK (1 test)
+
+
+2452
+    versionCode=7 minSdk=26 targetSdk=36
+    versionName=0.6.1
+История v2:
+
+ru.bruce.dispatcherinbox.HistoricalSeedTest:.
+
+Time: 0.11
+
+OK (1 test)
+
+
+
+ru.bruce.dispatcherinbox.MigrationTest:.
+
+Time: 0.017
+
+OK (1 test)
+
+
+2763
+    versionCode=7 minSdk=26 targetSdk=36
+    versionName=0.6.1
+История v060:
+
+ru.bruce.dispatcherinbox.HistoricalSeedTest:.
+
+Time: 0.106
+
+OK (1 test)
+
+
+
+ru.bruce.dispatcherinbox.MigrationTest:.
+
+Time: 0.016
+
+OK (1 test)
+
+
+3010
+    versionCode=7 minSdk=26 targetSdk=36
+    versionName=0.6.1
+
+Воспроизведённое падение прежнего APK 0.6.0:
+11-02 18:01:29.920  2663  2663 E AndroidRuntime: FATAL EXCEPTION: main
+11-02 18:01:29.920  2663  2663 E AndroidRuntime: java.lang.IllegalStateException: Room cannot verify the data integrity. Looks like you've changed schema but forgot to update the version number. You can simply fix this by increasing the version number. Expected identity hash: 4acad02e3a12c8fbce4f26670ca41eb5, found: d898c298292c599367b68e0745aaa056
+
+ru.bruce.dispatcherinbox.CaptureIntegrationTest:.
+
+Time: 42.02
+
+OK (1 test)
+
+
+
+ru.bruce.dispatcherinbox.ProcessRestartTest:.
+
+Time: 0.048
+
+OK (1 test)
+
+
