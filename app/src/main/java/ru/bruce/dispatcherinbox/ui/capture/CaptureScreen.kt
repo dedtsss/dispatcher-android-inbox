@@ -193,9 +193,9 @@ fun CaptureScreen(
         if (!compact && !editing) Spacer(Modifier.height(if (shortScreen) 8.dp else 32.dp))
         if (compact) {
         Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            OutlinedButton(colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.onSurface), onClick = { textExpanded = !textExpanded }, enabled = !state.isBusy && !state.localCommitted,
+            OutlinedButton(colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.onSurface), onClick = { textExpanded = !textExpanded }, enabled = !state.isBusy && (!compact || !state.localCommitted),
                 modifier = Modifier.weight(1f)) { Icon(if (compact && textExpanded) Icons.Default.Mic else Icons.Default.Keyboard, null, Modifier.size(18.dp)); Spacer(Modifier.width(6.dp)); Text(if (compact && textExpanded) "Голос" else "Текст") }
-            OutlinedButton(colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.onSurface), onClick = { viewModel.beginFileSelection(); filePicker.launch("*/*") }, enabled = !state.isBusy && !state.localCommitted,
+            OutlinedButton(colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.onSurface), onClick = { viewModel.beginFileSelection(); filePicker.launch("*/*") }, enabled = !state.isBusy && (!compact || !state.localCommitted),
                 modifier = Modifier.weight(1f)) { Icon(Icons.Default.AttachFile, null, Modifier.size(18.dp)); Spacer(Modifier.width(6.dp)); Text("Файл") }
         }
         } else {
@@ -207,7 +207,7 @@ fun CaptureScreen(
                 ),
                 shape = RoundedCornerShape(20.dp),
                 border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-                onClick = { textExpanded = !textExpanded }, enabled = !state.isBusy && !state.localCommitted,
+                onClick = { textExpanded = !textExpanded }, enabled = !state.isBusy && (!compact || !state.localCommitted),
                 modifier = Modifier.weight(1f).heightIn(min = 64.dp)
                     .semantics { contentDescription = if (textExpanded) "Свернуть поле текста" else "Добавить текст" },
             ) {
@@ -222,7 +222,7 @@ fun CaptureScreen(
                 ),
                 shape = RoundedCornerShape(20.dp),
                 border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-                onClick = { viewModel.beginFileSelection(); filePicker.launch("*/*") }, enabled = !state.isBusy && !state.localCommitted,
+                onClick = { viewModel.beginFileSelection(); filePicker.launch("*/*") }, enabled = !state.isBusy && (!compact || !state.localCommitted),
                 modifier = Modifier.weight(1f).heightIn(min = 64.dp),
             ) {
                 Icon(Icons.Default.FolderOpen, null, Modifier.size(24.dp))
@@ -239,7 +239,7 @@ fun CaptureScreen(
                     cursorColor = MaterialTheme.colorScheme.onSurface),
                 value = state.text,
                 onValueChange = viewModel::setText,
-                enabled = !state.isBusy && !state.localCommitted,
+                enabled = !state.isBusy && (!compact || !state.localCommitted),
                 label = { Text("Что записать?") },
                 modifier = Modifier
                     .fillMaxWidth()

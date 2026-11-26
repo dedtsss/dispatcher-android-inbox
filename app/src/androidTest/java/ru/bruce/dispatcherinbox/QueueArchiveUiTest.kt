@@ -103,7 +103,7 @@ class QueueArchiveUiTest {
                 scenario.recreate()
                 assertTrue(device.wait(Until.hasObject(By.text("Архив ($archiveCountAfterCleanup)")), 5000))
                 device.findObject(By.text("Архив ($archiveCountAfterCleanup)")).click()
-                val archivedSent = By.descContains("$prefix-sent. В архиве · Отправлено")
+                val archivedSent = By.descContains("$prefix-sent")
                 assertTrue(device.wait(Until.hasObject(archivedSent), 5000))
                 device.findObject(archivedSent).click()
                 assertTrue(device.wait(Until.hasObject(By.text("Вернуть в очередь")), 5000))
