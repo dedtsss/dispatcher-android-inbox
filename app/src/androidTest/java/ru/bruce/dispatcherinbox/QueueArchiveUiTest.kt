@@ -67,8 +67,10 @@ class QueueArchiveUiTest {
                 assertTrue(device.wait(Until.hasObject(By.text("Очистить отправленные ($sentCount)")), 10000))
                 val queueList = UiScrollable(UiSelector().scrollable(true))
                 fun assertVisibleStatus(marker: String, status: String) {
-                    assertTrue("Не найдена синтетическая запись $marker", queueList.scrollIntoView(UiSelector().textContains(marker)))
-                    assertTrue("Для $marker не показан статус $status", device.wait(Until.hasObject(By.text(status)), 3000))
+                    assertTrue("Не найдена синтетическая запись $marker",
+                        queueList.scrollIntoView(UiSelector().descriptionContains(marker)))
+                    assertTrue("Для $marker не показан статус $status",
+                        device.wait(Until.hasObject(By.descContains("$marker. $status")), 3000))
                 }
                 assertVisibleStatus("$prefix-sent", "Отправлено")
                 assertVisibleStatus("$prefix-waiting", "На телефоне · В очереди")
@@ -87,8 +89,7 @@ class QueueArchiveUiTest {
                 assertTrue(device.wait(Until.hasObject(By.text("Архив ($archiveCountAfterCleanup)")), 5000))
                 device.findObject(By.text("Архив ($archiveCountAfterCleanup)")).click()
                 assertTrue(device.wait(Until.hasObject(By.text("Вернуть в очередь")), 5000))
-                assertTrue(device.hasObject(By.text("В архиве · Отправлено")))
-                assertTrue(device.hasObject(By.textContains("$prefix-sent")))
+                assertTrue(device.hasObject(By.descContains("$prefix-sent. В архиве · Отправлено")))
                 device.findObjects(By.text("Вернуть в очередь")).first().click()
                 assertTrue(device.wait(Until.hasObject(By.text("К очереди")), 5000))
                 entries.forEach { before ->

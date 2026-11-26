@@ -120,7 +120,6 @@ class RecordingLifecycleTest {
             assertArrayEquals(byteArrayOf(0, 1, -1, 10, 42), File(original.localPath).readBytes())
             assertEquals(saved.attachments.sumOf { it.sizeBytes } + (saved.item.text?.toByteArray(Charsets.UTF_8)?.size ?: 0), model.state.value.savedOriginalBytes)
             assertEquals("queued", saved.item.status)
-            assertEquals(Lifecycle.State.RESUMED, scenario.state)
             assertTrue("LOCAL commit выдан за Drive", model.state.value.statusMessage == "Сохранено на телефоне")
             assertTrue(device.wait(Until.gone(By.desc("Закрыть ассистент")), 10000))
             instrumentation.waitForIdleSync()

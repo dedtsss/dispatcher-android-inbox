@@ -24,6 +24,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.semantics
 import java.util.Locale
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -125,6 +126,10 @@ private fun QueueCard(
         Column {
             Column(
                 Modifier.fillMaxWidth().heightIn(min = 80.dp)
+                    .semantics {
+                        contentDescription = "${typeLabel(entry)}. $summary. " +
+                            (if (archived) "В архиве · " else "") + delivery.label
+                    }
                     .clickable(role = Role.Button, onClickLabel = if (expanded) "Свернуть запись" else "Подробности записи") { expanded = !expanded }
                     .padding(horizontal = 12.dp, vertical = 10.dp),
                 verticalArrangement = Arrangement.spacedBy(4.dp),
