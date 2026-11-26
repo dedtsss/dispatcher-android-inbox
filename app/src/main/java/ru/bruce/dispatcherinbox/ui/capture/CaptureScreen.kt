@@ -153,9 +153,10 @@ fun CaptureScreen(
         }
     }
     val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
-    LaunchedEffect(viewModel, compact, lifecycleOwner) {
-        if (compact) lifecycleOwner.lifecycle.repeatOnLifecycle(androidx.lifecycle.Lifecycle.State.STARTED) {
-            viewModel.close.collect { kotlinx.coroutines.delay(1_000); onClose() }
+    LaunchedEffect(compact, lifecycleOwner, state.localCommitted) {
+        if (compact && state.localCommitted) lifecycleOwner.lifecycle.repeatOnLifecycle(androidx.lifecycle.Lifecycle.State.STARTED) {
+            kotlinx.coroutines.delay(1_000)
+            onClose()
         }
     }
 
@@ -243,7 +244,8 @@ fun CaptureScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(if (compact) 112.dp else 180.dp)
-                    .focusRequester(focusRequester),
+                    .focusRequester(focusRequester)
+                    .semantics { contentDescription = "Поле текста" },
                 shape = RoundedCornerShape(20.dp),
             )
 

@@ -137,9 +137,9 @@ class LocalCommitUiTest {
             assertTrue(device.wait(Until.hasObject(By.desc("Начать запись")), 10000))
             proof("main")
             device.findObject(By.desc("Добавить текст")).click()
-            assertTrue("Поле текста не появилось на главном экране", device.wait(Until.hasObject(By.text("Что записать?")), 5000))
-            device.findObject(By.text("Что записать?")).click()
-            val input = device.wait(Until.findObject(By.pkg(context.packageName).clazz("android.widget.EditText").focused(true)), 10000)!!
+            assertTrue("Поле текста не появилось на главном экране", device.wait(Until.hasObject(By.desc("Поле текста")), 5000))
+            val input = device.findObject(By.desc("Поле текста"))
+            input.click()
             val marker = "main-stays-${System.nanoTime()}"
             input.text = marker
             device.pressBack()
