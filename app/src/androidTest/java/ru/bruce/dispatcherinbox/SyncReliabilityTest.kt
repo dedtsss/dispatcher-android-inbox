@@ -51,6 +51,24 @@ class SyncReliabilityTest {
         fun item(id: String, status: String = InboxStatus.QUEUED) = InboxItemEntity(
             id, InboxType.TEXT, "Тест синхронизации", now, now, status, InboxSource.MANUAL, 0, null, null,
         )
+        val archivedId = "archive-${System.nanoTime()}"
+        val archivedOriginal = File(context.filesDir, "$archivedId.m4a").apply { writeBytes(byteArrayOf(9, 8, 7)) }
+        dao.insertItemWithAttachments(
+            item(archivedId, InboxStatus.SYNCED).copy(syncedAt = now, remoteId = "confirmed-remote"),
+            listOf(InboxAttachmentEntity("$archivedId-a", archivedId, archivedOriginal.path, "audio/mp4", archivedOriginal.name, archivedOriginal.length(), "test-sha")),
+        )
+        val protectedIds = listOf("queued", "syncing", "error").map { "$archivedId-$it" }
+        protectedIds.forEachIndexed { index, id ->
+            val status = listOf(InboxStatus.QUEUED, InboxStatus.SYNCING, InboxStatus.ERROR)[index]
+            dao.insertItem(item(id, status).copy(syncedAt = null))
+        }
+        assertEquals(1, repo.archiveConfirmed())
+        assertNotNull(dao.getById(archivedId)!!.item.archivedAt)
+        protectedIds.forEach { id -> assertNull("Очистка затронула $id", dao.getById(id)!!.item.archivedAt) }
+        assertArrayEquals(byteArrayOf(9, 8, 7), archivedOriginal.readBytes())
+        repo.restoreArchived(archivedId)
+        assertNull(dao.getById(archivedId)!!.item.archivedAt)
+        assertArrayEquals(byteArrayOf(9, 8, 7), archivedOriginal.readBytes())
         suspend fun awaitState(id: String, expected: String): InboxItemWithAttachments = withTimeout(15000) {
             while (true) {
                 val result = dao.getById(id)

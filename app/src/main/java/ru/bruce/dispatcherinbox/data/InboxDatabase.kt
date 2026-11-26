@@ -5,7 +5,7 @@ import androidx.room.RoomDatabase
 
 @Database(
     entities = [InboxItemEntity::class, InboxAttachmentEntity::class, ru.bruce.dispatcherinbox.drive.DriveCheckpoint::class],
-    version = 4,
+    version = 5,
     exportSchema = true,
 )
 abstract class InboxDatabase : RoomDatabase() {
@@ -30,6 +30,12 @@ abstract class InboxDatabase : RoomDatabase() {
                 db.execSQL("ALTER TABLE inbox_items ADD COLUMN lastAttemptAt INTEGER")
                 db.execSQL("ALTER TABLE inbox_items ADD COLUMN syncedAt INTEGER")
                 db.execSQL("ALTER TABLE inbox_items ADD COLUMN originalsDeletedAt INTEGER")
+            }
+        }
+
+        val MIGRATION_4_5 = object : androidx.room.migration.Migration(4, 5) {
+            override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE inbox_items ADD COLUMN archivedAt INTEGER")
             }
         }
 

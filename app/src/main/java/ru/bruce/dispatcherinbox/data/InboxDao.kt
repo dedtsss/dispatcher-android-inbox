@@ -33,6 +33,12 @@ interface InboxDao {
     @Query("SELECT * FROM inbox_items ORDER BY createdAt DESC")
     fun observeAll(): Flow<List<InboxItemWithAttachments>>
 
+    @Query("UPDATE inbox_items SET archivedAt = :at, updatedAt = :at WHERE status = 'synced' AND syncedAt IS NOT NULL AND archivedAt IS NULL")
+    suspend fun archiveAllConfirmed(at: Long): Int
+
+    @Query("UPDATE inbox_items SET archivedAt = NULL, updatedAt = :at WHERE id = :id AND status = 'synced' AND archivedAt IS NOT NULL")
+    suspend fun restoreArchived(id: String, at: Long): Int
+
     @Transaction
     @Query("SELECT * FROM inbox_items WHERE status IN ('queued', 'error') ORDER BY createdAt ASC")
     suspend fun getPending(): List<InboxItemWithAttachments>

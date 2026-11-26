@@ -53,10 +53,12 @@ import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.Movie
 import androidx.compose.material.icons.filled.Stop
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -64,6 +66,11 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.Crossfade
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.core.tween
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -149,7 +156,7 @@ fun CaptureScreen(
     val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
     LaunchedEffect(viewModel, compact, lifecycleOwner) {
         if (compact) lifecycleOwner.lifecycle.repeatOnLifecycle(androidx.lifecycle.Lifecycle.State.STARTED) {
-            viewModel.close.collect { kotlinx.coroutines.delay(500); onClose() }
+            viewModel.close.collect { kotlinx.coroutines.delay(1_000); onClose() }
         }
     }
 
@@ -182,16 +189,16 @@ fun CaptureScreen(
             }
         }
         if (!compact && !editing) Spacer(Modifier.weight(1f))
-        if (compact && !textExpanded) VoiceControl(state, true, onClick = { if (state.isRecording) viewModel.stopRecordingAndSave() else startWithPermission() })
+        if (compact && (!textExpanded || state.isRecording || state.isBusy || state.localCommitted)) VoiceControl(state, true, onClick = { if (state.isRecording) viewModel.stopRecordingAndSave() else startWithPermission() })
         if (!compact && (!editing || state.isRecording)) FullscreenVoiceControl(
             state, shortScreen = shortScreen, onClick = { if (state.isRecording) viewModel.stopRecordingAndSave() else startWithPermission() },
         )
         if (!compact && !editing) Spacer(Modifier.height(if (shortScreen) 8.dp else 32.dp))
         if (compact) {
         Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            OutlinedButton(colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.onSurface), onClick = { textExpanded = !textExpanded }, enabled = !state.isBusy && !state.isRecording,
+            OutlinedButton(colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.onSurface), onClick = { textExpanded = !textExpanded }, enabled = !state.isBusy && !state.localCommitted,
                 modifier = Modifier.weight(1f)) { Icon(if (compact && textExpanded) Icons.Default.Mic else Icons.Default.Keyboard, null, Modifier.size(18.dp)); Spacer(Modifier.width(6.dp)); Text(if (compact && textExpanded) "Голос" else "Текст") }
-            OutlinedButton(colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.onSurface), onClick = { viewModel.beginFileSelection(); filePicker.launch("*/*") }, enabled = !state.isBusy,
+            OutlinedButton(colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.onSurface), onClick = { viewModel.beginFileSelection(); filePicker.launch("*/*") }, enabled = !state.isBusy && !state.localCommitted,
                 modifier = Modifier.weight(1f)) { Icon(Icons.Default.AttachFile, null, Modifier.size(18.dp)); Spacer(Modifier.width(6.dp)); Text("Файл") }
         }
         } else {
@@ -203,7 +210,7 @@ fun CaptureScreen(
                 ),
                 shape = RoundedCornerShape(20.dp),
                 border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-                onClick = { textExpanded = !textExpanded }, enabled = !state.isBusy && !state.isRecording,
+                onClick = { textExpanded = !textExpanded }, enabled = !state.isBusy && !state.localCommitted,
                 modifier = Modifier.weight(1f).heightIn(min = 64.dp),
             ) {
                 Icon(Icons.Default.Description, null, Modifier.size(24.dp))
@@ -217,7 +224,7 @@ fun CaptureScreen(
                 ),
                 shape = RoundedCornerShape(20.dp),
                 border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-                onClick = { viewModel.beginFileSelection(); filePicker.launch("*/*") }, enabled = !state.isBusy,
+                onClick = { viewModel.beginFileSelection(); filePicker.launch("*/*") }, enabled = !state.isBusy && !state.localCommitted,
                 modifier = Modifier.weight(1f).heightIn(min = 64.dp),
             ) {
                 Icon(Icons.Default.FolderOpen, null, Modifier.size(24.dp))
@@ -234,7 +241,7 @@ fun CaptureScreen(
                     cursorColor = MaterialTheme.colorScheme.onSurface),
                 value = state.text,
                 onValueChange = viewModel::setText,
-                enabled = !state.isBusy,
+                enabled = !state.isBusy && !state.localCommitted,
                 label = { Text("Что записать?") },
                 modifier = Modifier
                     .fillMaxWidth()
@@ -262,9 +269,11 @@ fun CaptureScreen(
         if (compact) {
             Box(Modifier.fillMaxWidth().heightIn(min = 48.dp), contentAlignment = Alignment.Center) {
                 val message = if (state.localCommitted) "✓ Сохранено на телефоне · ${formatSize(state.savedOriginalBytes)}" else state.statusMessage.orEmpty()
-                Text(message, style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = if (state.localCommitted) FontWeight.Bold else FontWeight.Normal,
-                    color = if (state.isError) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface)
+                AnimatedVisibility(visible = message.isNotBlank(), enter = fadeIn(tween(180)), exit = fadeOut(tween(180))) {
+                    Text(message, style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = if (state.localCommitted) FontWeight.Bold else FontWeight.Normal,
+                        color = if (state.isError) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface)
+                }
             }
         } else state.statusMessage?.let { message ->
             Text(message, modifier = Modifier.padding(vertical = 8.dp),
@@ -331,19 +340,39 @@ private fun FullscreenVoiceControl(state: CaptureUiState, shortScreen: Boolean, 
 private fun VoiceControl(state: CaptureUiState, compact: Boolean, onClick: () -> Unit) {
     val amplitude = if (state.isRecording) state.recordingAmplitude else 0f
     val primary = ru.bruce.dispatcherinbox.ui.theme.CaptureAccent
+    val saved = Color(0xFF72D397)
+    val glow = if (state.localCommitted) saved else primary
+    val buttonTop by androidx.compose.animation.animateColorAsState(
+        if (state.localCommitted) Color(0xFF34734C) else Color(0xFFAF86E1), tween(220), label = "capture-button-top")
+    val buttonBottom by androidx.compose.animation.animateColorAsState(
+        if (state.localCommitted) Color(0xFF1D4B31) else Color(0xFF604086), tween(220), label = "capture-button-bottom")
+    val buttonBorder by androidx.compose.animation.animateColorAsState(
+        if (state.localCommitted) saved.copy(alpha = 0.85f) else primary.copy(alpha = 0.3f), tween(220), label = "capture-button-border")
     Column(Modifier.fillMaxWidth().padding(top = 8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
         Box(Modifier.size(if (compact) 132.dp else 156.dp).background(
-            Brush.radialGradient(listOf(primary.copy(alpha = 0.10f + amplitude * 0.10f), Color.Transparent))),
+            Brush.radialGradient(listOf(glow.copy(alpha = 0.10f + amplitude * 0.10f), Color.Transparent))),
             contentAlignment = Alignment.Center) {
-            Button(onClick = onClick, enabled = !state.isBusy || state.isRecording, shape = CircleShape,
+            Button(onClick = onClick, enabled = !state.localCommitted && (!state.isBusy || state.isRecording), shape = CircleShape,
                 modifier = Modifier.size(if (compact) 88.dp else 100.dp),
                 contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp),
-                border = BorderStroke(1.dp, primary.copy(alpha = 0.3f)),
+                border = BorderStroke(1.dp, buttonBorder),
                 colors = ButtonDefaults.buttonColors(containerColor = Color.Transparent,
                     contentColor = Color(0xFFF6EFFF))) {
-                Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color(0xFFAF86E1), Color(0xFF604086)))), contentAlignment = Alignment.Center) {
-                Icon(if (state.isRecording) Icons.Default.Stop else Icons.Default.Mic,
-                    if (state.isRecording) "Остановить и сохранить" else "Начать запись", Modifier.size(34.dp))
+                Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(buttonTop, buttonBottom))), contentAlignment = Alignment.Center) {
+                    val iconState = when {
+                        state.isRecording -> "recording"
+                        state.isBusy -> "saving"
+                        state.localCommitted -> "saved"
+                        else -> "idle"
+                    }
+                    Crossfade(targetState = iconState, animationSpec = tween(180), label = "capture-stop-feedback") { visibleState ->
+                        when (visibleState) {
+                            "saving" -> CircularProgressIndicator(modifier = Modifier.size(30.dp).semantics { contentDescription = "Сохраняем запись" }, color = Color(0xFFF6EFFF), strokeWidth = 3.dp)
+                            "saved" -> Icon(Icons.Default.Check, "Сохранено на телефоне", Modifier.size(34.dp), tint = Color(0xFFD7F5DE))
+                            "recording" -> Icon(Icons.Default.Stop, "Остановить и сохранить", Modifier.size(34.dp))
+                            else -> Icon(Icons.Default.Mic, "Начать запись", Modifier.size(34.dp))
+                        }
+                    }
                 }
             }
         }

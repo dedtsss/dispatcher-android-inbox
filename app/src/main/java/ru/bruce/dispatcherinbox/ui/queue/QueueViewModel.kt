@@ -20,6 +20,8 @@ class QueueViewModel(private val repository: InboxRepository, settingsRepository
 
     fun retry(id: String) = viewModelScope.launch { repository.retry(id) }
     fun delete(id: String) = viewModelScope.launch { repository.delete(id) }
+    fun archiveConfirmed() = viewModelScope.launch { repository.archiveConfirmed() }
+    fun restoreArchived(id: String) = viewModelScope.launch { repository.restoreArchived(id) }
 
     class Factory(private val repository: InboxRepository, private val settingsRepository: ru.bruce.dispatcherinbox.data.SettingsRepository) : ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST")

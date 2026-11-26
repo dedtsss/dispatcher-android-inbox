@@ -252,6 +252,8 @@ internal class CaptureSession(
             recordingAmplitude = 0f,
             recordingLevels = RecordingLevelMeter.emptyHistory(),
             isBusy = true,
+            statusMessage = "Сохраняем на телефоне…",
+            isError = false,
         )
         sessionScope.launch {
             try {

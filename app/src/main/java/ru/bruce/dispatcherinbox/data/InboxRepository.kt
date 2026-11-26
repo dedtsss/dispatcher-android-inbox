@@ -71,6 +71,12 @@ class InboxRepository(
         if (exists) syncScheduler.scheduleManual()
     }
 
+    suspend fun archiveConfirmed(): Int = dao.archiveAllConfirmed(System.currentTimeMillis())
+
+    suspend fun restoreArchived(id: String) {
+        dao.restoreArchived(id, System.currentTimeMillis())
+    }
+
     suspend fun delete(id: String) = ru.bruce.dispatcherinbox.sync.QueueDrainer.withQueueLock {
         val item = dao.getById(id) ?: return@withQueueLock
         check(item.item.status != InboxStatus.SYNCING) { "Отправка ещё не завершена" }

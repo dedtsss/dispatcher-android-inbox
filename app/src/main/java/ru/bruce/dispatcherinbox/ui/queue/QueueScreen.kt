@@ -6,6 +6,18 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material.icons.filled.Mic
+import androidx.compose.material.icons.filled.TextFields
+import androidx.compose.material.icons.filled.Image
+import androidx.compose.material.icons.filled.Description
+import androidx.compose.material.icons.filled.Movie
+import androidx.compose.material.icons.filled.AttachFile
+import androidx.compose.material.icons.filled.Done
+import androidx.compose.material.icons.filled.Schedule
+import androidx.compose.material.icons.filled.Sync
+import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material.icons.filled.Archive
+import androidx.compose.material.icons.filled.Undo
 import androidx.compose.material3.AlertDialog
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -49,6 +61,10 @@ fun QueueScreen(viewModel: QueueViewModel) {
     val context = androidx.compose.ui.platform.LocalContext.current
     val connect = { context.startActivity(android.content.Intent(context, ru.bruce.dispatcherinbox.drive.DriveConnectActivity::class.java)) }
     val entries by viewModel.items.collectAsStateWithLifecycle()
+    var showArchived by rememberSaveable { mutableStateOf(false) }
+    var confirmArchive by rememberSaveable { mutableStateOf(false) }
+    val visible = entries.filter { (it.item.archivedAt != null) == showArchived }
+    val sentCount = entries.count { it.item.archivedAt == null && it.item.status == InboxStatus.SYNCED && it.item.syncedAt != null }
     Column(Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 12.dp)) {
         Text("Очередь", style = MaterialTheme.typography.headlineSmall)
         Text(
@@ -56,20 +72,35 @@ fun QueueScreen(viewModel: QueueViewModel) {
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(bottom = 12.dp),
         )
-        if (entries.isEmpty()) {
+        OutlinedButton(onClick = { showArchived = !showArchived }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
+                Icon(if (showArchived) Icons.Default.Undo else Icons.Default.Archive, contentDescription = null)
+                Text(if (showArchived) "К очереди" else "Архив (${entries.count { it.item.archivedAt != null }})")
+        }
+        if (!showArchived && sentCount > 0) TextButton(onClick = { confirmArchive = true }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
+                Text("Очистить отправленные ($sentCount)")
+        }
+        if (visible.isEmpty()) {
             Text(
-                "Здесь пока пусто",
+                if (showArchived) "Архив пуст" else "Здесь пока пусто",
                 style = MaterialTheme.typography.bodyLarge,
                 modifier = Modifier.padding(top = 40.dp),
             )
         } else {
             LazyColumn(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                items(entries, key = { it.item.id }) { entry ->
-                    QueueCard(entry, settings.driveAccount.isNotBlank(), connect, viewModel::retry, viewModel::delete)
+                items(visible, key = { it.item.id }) { entry ->
+                    QueueCard(entry, settings.driveAccount.isNotBlank(), connect, viewModel::retry, viewModel::delete,
+                        showArchived, viewModel::restoreArchived)
                 }
             }
         }
     }
+    if (confirmArchive) AlertDialog(
+        onDismissRequest = { confirmArchive = false },
+        title = { Text("Скрыть отправленные из очереди?") },
+        text = { Text("Будут перемещены в архив только $sentCount записей, у которых Drive подтвердил отправку. История и локальные оригиналы сохранятся; незавершённые и ошибочные записи не изменятся.") },
+        confirmButton = { TextButton(onClick = { confirmArchive = false; viewModel.archiveConfirmed() }) { Text("В архив") } },
+        dismissButton = { TextButton(onClick = { confirmArchive = false }) { Text("Отмена") } },
+    )
 }
 
 @Composable
@@ -79,6 +110,8 @@ private fun QueueCard(
     onConnect: () -> Unit,
     onRetry: (String) -> Unit,
     onDelete: (String) -> Unit,
+    archived: Boolean,
+    onRestore: (String) -> Unit,
 ) {
     val item = entry.item
     val delivery = ru.bruce.dispatcherinbox.ui.deliveryStatus(item.status, driveConnected)
@@ -86,7 +119,7 @@ private fun QueueCard(
     var confirmDelete by rememberSaveable(item.id) { mutableStateOf(false) }
     val summary = item.text?.takeIf { it.isNotBlank() }
         ?: entry.attachments.firstOrNull()?.originalName?.takeIf { it.isNotBlank() }
-        ?: typeLabel(item.type)
+        ?: typeLabel(entry)
     val totalBytes = entry.attachments.sumOf { it.sizeBytes.coerceAtLeast(0) } + (item.text?.toByteArray(Charsets.UTF_8)?.size ?: 0)
     Card(shape = RoundedCornerShape(14.dp), modifier = Modifier.fillMaxWidth()) {
         Column {
@@ -97,15 +130,30 @@ private fun QueueCard(
                 verticalArrangement = Arrangement.spacedBy(4.dp),
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("${typeLabel(item.type)} · $summary", maxLines = 1, overflow = TextOverflow.Ellipsis,
+                    QueueTypeIcons(entry, Modifier.padding(end = 7.dp))
+                    Text("${typeLabel(entry)} · $summary", maxLines = 1, overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
                     Icon(if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore, contentDescription = null,
                         modifier = Modifier.size(20.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 Text("${formatTime(item.createdAt)} · ${formatSize(totalBytes)}",
                     style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Text(delivery.label, style = MaterialTheme.typography.labelMedium,
-                    color = if (delivery.isError) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant)
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                    val statusIcon = when (item.status) {
+                        InboxStatus.SYNCED -> Icons.Default.Done
+                        InboxStatus.SYNCING -> Icons.Default.Sync
+                        InboxStatus.ERROR -> Icons.Default.Warning
+                        else -> Icons.Default.Schedule
+                    }
+                    val statusColor = when (item.status) {
+                        InboxStatus.SYNCED -> androidx.compose.ui.graphics.Color(0xFF82D8A2)
+                        InboxStatus.ERROR -> MaterialTheme.colorScheme.error
+                        InboxStatus.SYNCING -> androidx.compose.ui.graphics.Color(0xFFC2A9F6)
+                        else -> androidx.compose.ui.graphics.Color(0xFFF2C56D)
+                    }
+                    Icon(statusIcon, contentDescription = null, tint = statusColor, modifier = Modifier.size(16.dp))
+                    Text(if (archived) "В архиве · ${delivery.label}" else delivery.label, style = MaterialTheme.typography.labelMedium, color = statusColor)
+                }
                 item.lastError?.takeIf { item.status == InboxStatus.ERROR }?.let {
                     Text(it, maxLines = 1, overflow = TextOverflow.Ellipsis,
                         color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
@@ -128,7 +176,11 @@ private fun QueueCard(
                 item.syncedAt?.let { Text("Загрузка подтверждена: ${formatTime(it)}", style = MaterialTheme.typography.bodySmall) }
                 item.originalsDeletedAt?.let { Text("Локальные копии файлов очищены: ${formatTime(it)}. Метаданные сохранены.",
                     style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
-                if (item.status == InboxStatus.ERROR || item.status == InboxStatus.QUEUED) {
+                if (archived) {
+                    TextButton(onClick = { onRestore(item.id) }, modifier = Modifier.heightIn(min = 48.dp)) {
+                        Icon(Icons.Default.Undo, contentDescription = null); Text("Вернуть в очередь")
+                    }
+                } else if (item.status == InboxStatus.ERROR || item.status == InboxStatus.QUEUED) {
                     OutlinedButton(colors = androidx.compose.material3.ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.onSurface),
                         onClick = { if (delivery.waitingForDrive) onConnect() else onRetry(item.id) }, modifier = Modifier.heightIn(min = 48.dp)) {
                         Icon(Icons.Default.Refresh, contentDescription = null)
@@ -165,6 +217,49 @@ private fun typeLabel(type: String) = when (type) {
     "document" -> "Документ"
     "mixed" -> "Текст и файлы"
     else -> "Файл"
+}
+
+private fun typeLabel(entry: InboxItemWithAttachments): String =
+    if (entry.item.type == "mixed") "Смешанная запись" else typeLabel(entry.item.type)
+
+@Composable
+private fun QueueTypeIcons(entry: InboxItemWithAttachments, modifier: Modifier = Modifier) {
+    val item = entry.item
+    val types = buildSet {
+        if (!item.text.isNullOrBlank()) add("text")
+        entry.attachments.forEach { attachment ->
+            val mime = attachment.mimeType.orEmpty().lowercase()
+            add(when {
+                mime.startsWith("audio/") -> "voice"
+                mime.startsWith("image/") -> "image"
+                mime.startsWith("video/") -> "video"
+                mime.isNotBlank() -> "document"
+                else -> "file"
+            })
+        }
+        if (isEmpty()) add(item.type)
+    }.take(3)
+    Row(modifier, horizontalArrangement = Arrangement.spacedBy(2.dp), verticalAlignment = Alignment.CenterVertically) {
+        types.forEach { type ->
+            val icon = when (type) {
+                "voice" -> Icons.Default.Mic
+                "text" -> Icons.Default.TextFields
+                "image" -> Icons.Default.Image
+                "video" -> Icons.Default.Movie
+                "document" -> Icons.Default.Description
+                else -> Icons.Default.AttachFile
+            }
+            val description = when (type) {
+                "voice" -> "Тип: голосовая запись"
+                "text" -> "Тип: текстовая запись"
+                "image" -> "Тип: фотография"
+                "video" -> "Тип: видео"
+                "document" -> "Тип: документ"
+                else -> "Тип: файл"
+            }
+            Icon(icon, contentDescription = description, modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+    }
 }
 
 private fun formatTime(timestamp: Long): String = DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm")
