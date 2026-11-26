@@ -173,9 +173,6 @@ fun CaptureScreen(
     ) {
         Box(Modifier.fillMaxWidth().height(if (compact) 56.dp else if (shortScreen) 48.dp else 64.dp), contentAlignment = if (compact) Alignment.Center else Alignment.CenterStart) {
             if (compact) {
-                IconButton(onClick = onClose, modifier = Modifier.align(Alignment.CenterStart).size(48.dp)) {
-                    Icon(Icons.Default.Close, "Закрыть ассистент")
-                }
                 Image(cat, contentDescription = "Catching", contentScale = androidx.compose.ui.layout.ContentScale.Fit,
                     modifier = Modifier.size(48.dp).clickable(onClick = onOpenApp).padding(2.dp))
                 IconButton(onClick = onOpenSettings, modifier = Modifier.align(Alignment.CenterEnd).size(48.dp)) {
@@ -293,6 +290,14 @@ fun CaptureScreen(
 
         if (!compact && !editing) Spacer(Modifier.weight(1f))
         Spacer(Modifier.height(if (compact) 18.dp else 8.dp))
+    }
+    if (compact) {
+        IconButton(
+            onClick = onClose,
+            modifier = Modifier.align(Alignment.TopStart).padding(start = 14.dp, top = 14.dp).size(48.dp),
+        ) {
+            Icon(Icons.Default.Close, "Закрыть ассистент")
+        }
     }
     }
 }

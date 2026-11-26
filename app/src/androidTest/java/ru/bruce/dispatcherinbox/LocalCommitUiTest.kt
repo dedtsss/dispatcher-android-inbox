@@ -136,7 +136,7 @@ class LocalCommitUiTest {
             device.pressBack()
             assertTrue(device.wait(Until.hasObject(By.desc("Начать запись")), 10000))
             proof("main")
-            device.findObject(By.text("Текст")).click()
+            device.findObjects(By.text("Текст")).last().click()
             val input = device.wait(Until.findObject(By.pkg(context.packageName).clazz("android.widget.EditText").focused(true)), 10000)!!
             val marker = "main-stays-${System.nanoTime()}"
             input.text = marker

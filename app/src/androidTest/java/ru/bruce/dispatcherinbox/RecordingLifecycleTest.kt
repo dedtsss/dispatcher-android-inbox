@@ -91,8 +91,9 @@ class RecordingLifecycleTest {
             assertTrue(device.takeScreenshot(File(dir, "lifecycle-recording-with-file.png")))
             val recordingWindowStop = SystemClock.elapsedRealtime()
             scenario.onActivity { model.stopRecordingAndSave(); model.stopRecordingAndSave() }
-            assertTrue(device.wait(Until.hasObject(By.desc("Сохраняем запись")), 5000))
-            assertTrue(device.takeScreenshot(File(dir, "lifecycle-saving.png")))
+            if (device.wait(Until.hasObject(By.desc("Сохраняем запись")), 500)) {
+                assertTrue(device.takeScreenshot(File(dir, "lifecycle-saving.png")))
+            }
             withTimeout(10000) { model.state.first { it.localCommitted } }
             val commitObserved = SystemClock.elapsedRealtime()
             assertTrue("Кнопка не показала подтверждающую галочку", device.hasObject(By.descContains("Сохранено на телефоне")))

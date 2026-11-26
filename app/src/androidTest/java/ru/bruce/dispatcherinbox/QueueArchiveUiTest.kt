@@ -6,6 +6,8 @@ import androidx.test.core.app.ActivityScenario
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.uiautomator.By
 import androidx.test.uiautomator.UiDevice
+import androidx.test.uiautomator.UiScrollable
+import androidx.test.uiautomator.UiSelector
 import androidx.test.uiautomator.Until
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.flow.first
@@ -63,10 +65,15 @@ class QueueArchiveUiTest {
                 assertTrue(device.wait(Until.hasObject(By.text("Очередь")), 10000))
                 device.findObjects(By.text("Очередь")).last().click()
                 assertTrue(device.wait(Until.hasObject(By.text("Очистить отправленные ($sentCount)")), 10000))
-                assertTrue(device.hasObject(By.text("Отправлено")))
-                assertTrue(device.hasObject(By.text("На телефоне · В очереди")))
-                assertTrue(device.hasObject(By.text("Отправляется")))
-                assertTrue(device.hasObject(By.text("Ошибка загрузки")))
+                val queueList = UiScrollable(UiSelector().scrollable(true))
+                fun assertVisibleStatus(marker: String, status: String) {
+                    assertTrue("Не найдена синтетическая запись $marker", queueList.scrollIntoView(UiSelector().textContains(marker)))
+                    assertTrue("Для $marker не показан статус $status", device.wait(Until.hasObject(By.text(status)), 3000))
+                }
+                assertVisibleStatus("$prefix-sent", "Отправлено")
+                assertVisibleStatus("$prefix-waiting", "На телефоне · В очереди")
+                assertVisibleStatus("$prefix-uploading", "Отправляется")
+                assertVisibleStatus("$prefix-failed", "Ошибка загрузки")
                 assertTrue("Изображение классифицировано по расширению, а не MIME", device.hasObject(By.descContains("Тип: фотография")))
                 assertTrue("Документ классифицирован как изображение по расширению", device.hasObject(By.descContains("Тип: документ")))
                 val evidence = File(context.getExternalFilesDir(null), "catching-evidence").apply { mkdirs() }
