@@ -66,11 +66,9 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.Crossfade
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -80,6 +78,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.semantics.contentDescription
@@ -269,11 +268,10 @@ fun CaptureScreen(
         if (compact) {
             Box(Modifier.fillMaxWidth().heightIn(min = 48.dp), contentAlignment = Alignment.Center) {
                 val message = if (state.localCommitted) "✓ Сохранено на телефоне · ${formatSize(state.savedOriginalBytes)}" else state.statusMessage.orEmpty()
-                AnimatedVisibility(visible = message.isNotBlank(), enter = fadeIn(tween(180)), exit = fadeOut(tween(180))) {
-                    Text(message, style = MaterialTheme.typography.bodyMedium,
-                        fontWeight = if (state.localCommitted) FontWeight.Bold else FontWeight.Normal,
-                        color = if (state.isError) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface)
-                }
+                val messageAlpha by animateFloatAsState(if (message.isBlank()) 0f else 1f, tween(180), label = "capture-status-fade")
+                Text(message, modifier = Modifier.alpha(messageAlpha), style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = if (state.localCommitted) FontWeight.Bold else FontWeight.Normal,
+                    color = if (state.isError) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface)
             }
         } else state.statusMessage?.let { message ->
             Text(message, modifier = Modifier.padding(vertical = 8.dp),
